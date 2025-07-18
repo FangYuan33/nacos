@@ -126,7 +126,7 @@ public class ConfigOperationService {
         
         configMigrateService.publishConfigMigrate(configForm, configRequestInfo, configForm.getEncryptedDataKey());
         
-        //formal publish
+        // formal publish 根据md5值进行 CAS 更新操作
         if (StringUtils.isNotBlank(configRequestInfo.getCasMd5())) {
             configOperateResult = configInfoPersistService.insertOrUpdateCas(configRequestInfo.getSrcIp(),
                     configForm.getSrcUser(), configInfo, configAdvanceInfo);
@@ -154,6 +154,7 @@ public class ConfigOperationService {
                 }
             }
         }
+        // 发布 ConfigDataChangeEvent 配置变更事件
         ConfigChangePublisher.notifyConfigChange(
                 new ConfigDataChangeEvent(configForm.getDataId(), configForm.getGroup(), configForm.getNamespaceId(),
                         configOperateResult.getLastModified()));

@@ -47,9 +47,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Listener Management.
- *
- * @author Nacos
+ * CacheData - 配置缓存数据对象，是 Nacos 客户端配置管理的核心数据结构，代表一个完整的配置项及其状态
+ * <p>
+ * 作用：
+ * 1. 配置项的唯一标识：通过 dataId + group + tenant 三元组唯一标识一个配置
+ * 2. 配置内容缓存：存储配置的实际内容、MD5值、加密密钥等
+ * 3. 监听器管理：管理该配置的所有监听器
+ * 4. 状态跟踪：跟踪配置与服务端的同步状态
+ * 5. 变更检测：通过MD5比较检测配置是否发生变更
  */
 public class CacheData {
     
@@ -108,23 +113,26 @@ public class CacheData {
     public final String group;
     
     public final String tenant;
-    
+
+    // 监听器列表
     private final CopyOnWriteArrayList<ManagerListenerWrap> listeners;
     
     private volatile String md5;
-    
+
     /**
-     * whether use local config.
+     * 是否使用本地配置
      */
     private volatile boolean isUseLocalConfig = false;
-    
+
     /**
-     * last modify time.
+     * 最近一次的修改时间
      */
     private volatile long localConfigLastModified;
-    
+
+    // 配置内容
     private volatile String content;
-    
+
+    // 加密密钥
     private volatile String encryptedDataKey;
     
     /**
@@ -135,15 +143,18 @@ public class CacheData {
     /**
      * notify change flag,for notify&sync concurrent control. 1.reset to false if starting to sync with server. 2.update
      * to true if receive config change notification.
+     * 是否收到变更通知
      */
     private final AtomicBoolean receiveNotifyChanged = new AtomicBoolean(false);
-    
+
+    // 任务 ID
     private int taskId;
     
     private volatile boolean isInitializing = true;
     
     /**
      * if is cache data md5 sync with the server.
+     * 是否与服务端一致
      */
     private final AtomicBoolean isConsistentWithServer = new AtomicBoolean();
     
@@ -151,7 +162,8 @@ public class CacheData {
      * if is cache data is discard,need to remove.
      */
     private volatile boolean isDiscard = false;
-    
+
+    // 配置类型(JSON、YAML等)
     private String type;
     
     public boolean isInitializing() {

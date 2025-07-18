@@ -103,7 +103,7 @@ public class ConsoleConfigController {
     
     /**
      * Add or update configuration.
-     *
+     * 新增或修改配置的入口
      * @param request    HTTP servlet request.
      * @param configForm Configuration form.
      * @return Result containing success status.

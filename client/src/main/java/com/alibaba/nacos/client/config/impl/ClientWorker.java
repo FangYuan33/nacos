@@ -1058,24 +1058,29 @@ public class ClientWorker implements Closeable {
         
         @SuppressWarnings("PMD.MethodTooLongRule")
         private boolean checkListenCache(Map<String, List<CacheData>> listenCachesMap) throws NacosException {
-            
+            // 使用原子布尔值记录是否有配置发生变更，保证线程安全
             final AtomicBoolean hasChangedKeys = new AtomicBoolean(false);
+
+            // 如果没有需要监听的缓存，直接返回false
             if (!listenCachesMap.isEmpty()) {
                 List<Future> listenFutures = new ArrayList<>();
                 for (Map.Entry<String, List<CacheData>> entry : listenCachesMap.entrySet()) {
                     String taskId = entry.getKey();
+                    // 为每个 taskId 都创建一个 RpcClient 客户端
                     RpcClient rpcClient = ensureRpcClient(taskId);
-                    
+                    // 每个 taskId 专门分配一个线程数为 1 的线程池
                     ExecutorService executorService = ensureSyncExecutor(taskId);
                     Future future = executorService.submit(() -> {
                         List<CacheData> listenCaches = entry.getValue();
-                        //reset notify change flag.
+                        // 重置通知变更标识
                         for (CacheData cacheData : listenCaches) {
                             cacheData.getReceiveNotifyChanged().set(false);
                         }
+                        // 将多个配置的监听请求合并为一个批量请求，提高网络效率
                         ConfigBatchListenRequest configChangeListenRequest = buildConfigRequest(listenCaches);
                         configChangeListenRequest.setListen(true);
                         try {
+                            // 向 Nacos 服务端发送批量监听请求，检查配置是否有变更
                             ConfigChangeBatchListenResponse listenResponse = (ConfigChangeBatchListenResponse) requestProxy(
                                     rpcClient, configChangeListenRequest);
                             if (listenResponse != null && listenResponse.isSuccess()) {
@@ -1083,19 +1088,23 @@ public class ClientWorker implements Closeable {
                                 Set<String> changeKeys = new HashSet<String>();
                                 
                                 List<ConfigChangeBatchListenResponse.ConfigContext> changedConfigs = listenResponse.getChangedConfigs();
-                                //handle changed keys,notify listener
+                                // 获取服务端返回的变更配置列表，并通知监听者
                                 if (!CollectionUtils.isEmpty(changedConfigs)) {
                                     hasChangedKeys.set(true);
                                     for (ConfigChangeBatchListenResponse.ConfigContext changeConfig : changedConfigs) {
+                                        // 构建配置的唯一标识key：dataId+group+tenant
                                         String changeKey = GroupKey.getKeyTenant(changeConfig.getDataId(),
                                                 changeConfig.getGroup(), changeConfig.getTenant());
                                         changeKeys.add(changeKey);
+                                        // 检查配置是否处于初始化状态，初始化状态的配置不需要通知监听器，避免重复通知
                                         boolean isInitializing = cacheMap.get().get(changeKey).isInitializing();
+                                        // 刷新配置内容并检查MD5，触发监听器回调
                                         refreshContentAndCheck(rpcClient, changeKey, !isInitializing);
                                     }
                                     
                                 }
-                                
+
+                                // 某些配置可能通过服务端主动推送得到变更通知，但不在changedConfigs列表中
                                 for (CacheData cacheData : listenCaches) {
                                     if (cacheData.getReceiveNotifyChanged().get()) {
                                         String changeKey = GroupKey.getKeyTenant(cacheData.dataId, cacheData.group,
@@ -1123,18 +1132,21 @@ public class ClientWorker implements Closeable {
                                 
                             }
                         } catch (Throwable e) {
+                            // 发生异常的话进行重试
                             LOGGER.error("Execute listen config change error ", e);
                             try {
                                 Thread.sleep(50L);
                             } catch (InterruptedException interruptedException) {
                                 //ignore
                             }
+                            // 重新触发监听检查
                             notifyListenConfig();
                         }
                     });
+                    // 将异步任务添加到Future列表中
                     listenFutures.add(future);
-                    
                 }
+                // 阻塞等待任务完成
                 for (Future future : listenFutures) {
                     try {
                         future.get();

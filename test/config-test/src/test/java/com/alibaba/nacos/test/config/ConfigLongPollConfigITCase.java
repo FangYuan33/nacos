@@ -45,11 +45,11 @@ import java.util.concurrent.TimeUnit;
  **/
 @SuppressWarnings("checkstyle:AbbreviationAsWordInName")
 @ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = Nacos.class, properties = {
-        "server.servlet.context-path=/nacos"}, webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
+//@SpringBootTest(classes = Nacos.class, properties = {
+//        "server.servlet.context-path=/nacos"}, webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class ConfigLongPollConfigITCase {
     
-    @LocalServerPort
+//    @LocalServerPort
     private int port;
     
     private ConfigService configService;
@@ -65,7 +65,7 @@ class ConfigLongPollConfigITCase {
     @BeforeEach
     void init() throws NacosException {
         Properties properties = new Properties();
-        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:" + port);
+        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8848");
         properties.put(PropertyKeyConst.CONFIG_LONG_POLL_TIMEOUT, "20000");
         properties.put(PropertyKeyConst.CONFIG_RETRY_TIME, "3000");
         properties.put(PropertyKeyConst.MAX_RETRY, "5");
@@ -83,8 +83,7 @@ class ConfigLongPollConfigITCase {
     
     @Test
     void test() throws InterruptedException, NacosException {
-        
-        configService.addListener("test", "DEFAULT_GROUP", new Listener() {
+        configService.addListener("default_value", "DEFAULT_GROUP", new Listener() {
             @Override
             public Executor getExecutor() {
                 return null;
@@ -108,7 +107,7 @@ class ConfigLongPollConfigITCase {
             }
         });
         
-        TimeUnit.SECONDS.sleep(10);
+        TimeUnit.SECONDS.sleep(10000);
         
     }
     
