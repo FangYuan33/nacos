@@ -1,22 +1,3 @@
-/*
- * Copyright 1999-2018 Alibaba Group Holding Ltd.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/******************************************/
-/*   表名称 = config_info                  */
-/******************************************/
 CREATE TABLE `config_info` (
                                `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'id',
                                `data_id` varchar(255) NOT NULL COMMENT 'data_id',
@@ -39,9 +20,6 @@ CREATE TABLE `config_info` (
                                UNIQUE KEY `uk_configinfo_datagrouptenant` (`data_id`,`group_id`,`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin COMMENT='config_info';
 
-/******************************************/
-/*   表名称 = config_info  since 2.5.0                */
-/******************************************/
 CREATE TABLE `config_info_gray` (
                                     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'id',
                                     `data_id` varchar(255) NOT NULL COMMENT 'data_id',
@@ -63,9 +41,6 @@ CREATE TABLE `config_info_gray` (
                                     KEY `idx_gmt_modified` (`gmt_modified`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='config_info_gray';
 
-/******************************************/
-/*   表名称 = config_tags_relation         */
-/******************************************/
 CREATE TABLE `config_tags_relation` (
                                         `id` bigint(20) NOT NULL COMMENT 'id',
                                         `tag_name` varchar(128) NOT NULL COMMENT 'tag_name',
@@ -79,9 +54,6 @@ CREATE TABLE `config_tags_relation` (
                                         KEY `idx_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin COMMENT='config_tag_relation';
 
-/******************************************/
-/*   表名称 = group_capacity               */
-/******************************************/
 CREATE TABLE `group_capacity` (
                                   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
                                   `group_id` varchar(128) NOT NULL DEFAULT '' COMMENT 'Group ID，空字符表示整个集群',
@@ -97,9 +69,6 @@ CREATE TABLE `group_capacity` (
                                   UNIQUE KEY `uk_group_id` (`group_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin COMMENT='集群、各Group容量信息表';
 
-/******************************************/
-/*   表名称 = his_config_info              */
-/******************************************/
 CREATE TABLE `his_config_info` (
                                    `id` bigint(20) unsigned NOT NULL COMMENT 'id',
                                    `nid` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'nid, 自增标识',
@@ -125,9 +94,6 @@ CREATE TABLE `his_config_info` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin COMMENT='多租户改造';
 
 
-/******************************************/
-/*   表名称 = tenant_capacity              */
-/******************************************/
 CREATE TABLE `tenant_capacity` (
                                    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
                                    `tenant_id` varchar(128) NOT NULL DEFAULT '' COMMENT 'Tenant ID',
