@@ -189,7 +189,7 @@ public class LongPollingService {
             return;
         }
         
-        // Must be called by http thread, or send response.
+        // Must be called by http thread, or send response. 启动异步上下文，保持 HTTP 连接不关闭
         final AsyncContext asyncContext = req.startAsync();
         // AsyncContext.setTimeout() is incorrect, Control by oneself
         asyncContext.setTimeout(0L);
@@ -210,6 +210,7 @@ public class LongPollingService {
         // Add delay time for LoadBalance, and one response is returned 500 ms in advance to avoid client timeout.
         String requestLongPollingTimeOut = req.getHeader(LongPollingService.LONG_POLLING_HEADER);
         long timeout = Math.max(minLongPoolingTimeout, Long.parseLong(requestLongPollingTimeOut) - delayTime);
+        // 创建长轮训客户端，保存 AsyncContext，定时线程池调度
         ConfigExecutor.executeLongPolling(
                 new ClientLongPolling(asyncContext, clientMd5Map, ip, probeRequestSize, timeout, appName, tag));
     }
@@ -270,16 +271,20 @@ public class LongPollingService {
         @Override
         public void run() {
             try {
+                // 遍历所有等待中的长轮询客户端
                 for (Iterator<ClientLongPolling> iter = allSubs.iterator(); iter.hasNext(); ) {
                     ClientLongPolling clientSub = iter.next();
+
+                    // 检查客户端是否监听了发生变更的配置
                     if (clientSub.clientMd5Map.containsKey(groupKey)) {
-                        
                         getRetainIps().put(clientSub.ip, System.currentTimeMillis());
-                        iter.remove(); // Delete subscribers' relationships.
+                        // 删除订阅者的关系
+                        iter.remove();
                         LogUtil.CLIENT_LOG.info("{}|{}|{}|{}|{}|{}|{}", (System.currentTimeMillis() - changeTime),
                                 "in-advance",
                                 RequestUtil.getRemoteIp((HttpServletRequest) clientSub.asyncContext.getRequest()),
                                 "polling", clientSub.clientMd5Map.size(), clientSub.probeRequestSize, groupKey);
+                        // 发送响应给客户端        
                         clientSub.sendResponse(Collections.singletonMap(groupKey, clientSub.clientMd5Map.get(groupKey)));
                     }
                 }
@@ -312,6 +317,7 @@ public class LongPollingService {
         
         @Override
         public void run() {
+            // 超时后执行的任务
             asyncTimeoutFuture = ConfigExecutor.scheduleLongPolling(() -> {
                 try {
                     getRetainIps().put(ClientLongPolling.this.ip, System.currentTimeMillis());
@@ -335,6 +341,7 @@ public class LongPollingService {
                 
             }, timeoutTime, TimeUnit.MILLISECONDS);
             
+            // 关键：将自己添加到全局长轮询队列中，等待配置变更通知
             allSubs.add(this);
         }
         

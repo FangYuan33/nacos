@@ -95,19 +95,19 @@ class ConfigLongPollConfigITCase {
             }
         });
         
-        configService.addListener("test-1", "DEFAULT_GROUP", new Listener() {
-            @Override
-            public Executor getExecutor() {
-                return null;
-            }
-            
-            @Override
-            public void receiveConfigInfo(String configInfo) {
-                System.out.println(configInfo);
-            }
-        });
+//        configService.addListener("test-1", "DEFAULT_GROUP", new Listener() {
+//            @Override
+//            public Executor getExecutor() {
+//                return null;
+//            }
+//
+//            @Override
+//            public void receiveConfigInfo(String configInfo) {
+//                System.out.println(configInfo);
+//            }
+//        });
         
-        TimeUnit.SECONDS.sleep(10000);
+        TimeUnit.SECONDS.sleep(1000000);
         
     }
     

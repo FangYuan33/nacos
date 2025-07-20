@@ -248,6 +248,7 @@ public abstract class GrpcClient extends RpcClient {
     
     private StreamObserver<Payload> bindRequestStream(final BiRequestStreamGrpc.BiRequestStreamStub streamStub,
             final GrpcConnection grpcConn) {
+        // 返回一个 StreamObserver，用于向服务端发送请求
         return streamStub.requestBiStream(new StreamObserver<Payload>() {
             @Override
             public void onNext(Payload payload) {
@@ -336,13 +337,19 @@ public abstract class GrpcClient extends RpcClient {
         // the newest connection id
         String connectionId = "";
         try {
+            // 第一步：创建 gRPC 执行器线程池
             if (grpcExecutor == null) {
                 this.grpcExecutor = createGrpcExecutor(serverInfo.getServerIp());
             }
+            // 第二步：计算服务端 gRPC 端口
+            // 通常是 HTTP 端口 + 1000，如 8848 -> 9848
             int port = serverInfo.getServerPort() + rpcPortOffset();
+            // 第三步：创建 gRPC 管理通道
             ManagedChannel managedChannel = createNewManagedChannel(serverInfo.getServerIp(), port);
+            // 第四步：创建 gRPC 存根（Stub）
             RequestGrpc.RequestFutureStub newChannelStubTemp = createNewChannelStub(managedChannel);
             
+            // 第五步：服务器健康检查
             Response response = serverCheck(serverInfo.getServerIp(), port, newChannelStubTemp);
             if (!(response instanceof ServerCheckResponse)) {
                 shuntDownChannel(managedChannel);
@@ -350,14 +357,18 @@ public abstract class GrpcClient extends RpcClient {
             }
             // submit ability table as soon as possible
             // ability table will be null if server doesn't support ability table
+            // 第六步：获取连接ID和服务器能力信息
             ServerCheckResponse serverCheckResponse = (ServerCheckResponse) response;
             connectionId = serverCheckResponse.getConnectionId();
             
+            // 第七步：创建双向流存根
             BiRequestStreamGrpc.BiRequestStreamStub biRequestStreamStub = BiRequestStreamGrpc.newStub(
                     newChannelStubTemp.getChannel());
+            // 第八步：创建 gRPC 连接对象
             GrpcConnection grpcConn = new GrpcConnection(serverInfo, grpcExecutor);
             grpcConn.setConnectionId(connectionId);
             // if not supported, it will be false
+            // 第九步：处理能力协商
             if (serverCheckResponse.isSupportAbilityNegotiation()) {
                 // mark
                 this.recAbilityContext.reset(grpcConn);
@@ -366,13 +377,17 @@ public abstract class GrpcClient extends RpcClient {
             }
             
             //create stream request and bind connection event to this connection.
+            // 第十步：绑定双向流 - 关键步骤
             StreamObserver<Payload> payloadStreamObserver = bindRequestStream(biRequestStreamStub, grpcConn);
             
             // stream observer to send response to server
+            // 第十一步：设置连接属性
             grpcConn.setPayloadStreamObserver(payloadStreamObserver);
             grpcConn.setGrpcFutureServiceStub(newChannelStubTemp);
             grpcConn.setChannel(managedChannel);
+
             //send a  setup request.
+            // 第十二步：发送连接建立请求
             ConnectionSetupRequest conSetupRequest = new ConnectionSetupRequest();
             conSetupRequest.setClientVersion(getClientVersion());
             conSetupRequest.setLabels(super.getLabels());
@@ -380,8 +395,10 @@ public abstract class GrpcClient extends RpcClient {
             conSetupRequest.setAbilityTable(
                     NacosAbilityManagerHolder.getInstance().getCurrentNodeAbilities(abilityMode()));
             conSetupRequest.setTenant(super.getTenant());
+            // 发送建立连接请求
             grpcConn.sendRequest(conSetupRequest);
             // wait for response
+            // 第十三步：等待服务端确认
             if (recAbilityContext.isNeedToSync()) {
                 // try to wait for notify response
                 recAbilityContext.await(this.clientConfig.capabilityNegotiationTimeout(), TimeUnit.MILLISECONDS);

@@ -48,7 +48,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * CacheData - 配置缓存数据对象，是 Nacos 客户端配置管理的核心数据结构，代表一个完整的配置项及其状态
- * <p>
  * 作用：
  * 1. 配置项的唯一标识：通过 dataId + group + tenant 三元组唯一标识一个配置
  * 2. 配置内容缓存：存储配置的实际内容、MD5值、加密密钥等
@@ -119,14 +118,10 @@ public class CacheData {
     
     private volatile String md5;
 
-    /**
-     * 是否使用本地配置
-     */
+    // 是否使用本地配置
     private volatile boolean isUseLocalConfig = false;
 
-    /**
-     * 最近一次的修改时间
-     */
+    // 本地配置的最后修改时间
     private volatile long localConfigLastModified;
 
     // 配置内容
@@ -330,9 +325,11 @@ public class CacheData {
         return "CacheData [" + dataId + ", " + group + "]";
     }
     
+    // 检查配置是否发生变更
     void checkListenerMd5() {
         for (ManagerListenerWrap wrap : listeners) {
             if (!md5.equals(wrap.lastCallMd5)) {
+                // 配置发生变更，触发监听器
                 safeNotifyListener(dataId, group, content, type, md5, encryptedDataKey, wrap);
             }
         }

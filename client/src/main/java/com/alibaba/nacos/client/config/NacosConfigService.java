@@ -72,18 +72,25 @@ public class NacosConfigService implements ConfigService {
     private final ConfigFilterChainManager configFilterChainManager;
     
     public NacosConfigService(Properties properties) throws NacosException {
+        // 异步预加载消耗性能的组件，提升初始化速度
         PreInitUtils.asyncPreLoadCostComponent();
+        // 构建客户端属性配置
         final NacosClientProperties clientProperties = NacosClientProperties.PROTOTYPE.derive(properties);
         LOGGER.info(ClientBasicParamUtil.getInputParameters(clientProperties.asProperties()));
+        // 验证初始化参数的合法性
         ValidatorUtils.checkInitParam(clientProperties);
         
+        // 初始化命名空间配置
         initNamespace(clientProperties);
+        // 创建配置过滤器链管理器，用于处理配置的加密解密等
         this.configFilterChainManager = new ConfigFilterChainManager(clientProperties.asProperties());
+        // 创建并启动配置服务器列表管理器，负责维护可用的 Nacos 服务器地址
         ConfigServerListManager serverListManager = new ConfigServerListManager(clientProperties);
         serverListManager.start();
         
+        // 创建客户端工作器 - 长轮询机制的核心组件
+        // 负责与服务端建立长轮询连接，监听配置变更
         this.worker = new ClientWorker(this.configFilterChainManager, serverListManager, clientProperties);
-        
     }
     
     private void initNamespace(NacosClientProperties properties) {
@@ -119,6 +126,8 @@ public class NacosConfigService implements ConfigService {
     
     @Override
     public void addListener(String dataId, String group, Listener listener) throws NacosException {
+        // 将监听器添加到 ClientWorker 中进行管理
+        // 这是长轮询机制的入口点
         worker.addTenantListeners(dataId, group, Collections.singletonList(listener));
     }
     

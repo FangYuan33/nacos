@@ -91,6 +91,7 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
             return;
         }
         int notifyClientCount = 0;
+        // 获取所有监听该配置的客户端连接
         for (final String client : listeners) {
             Connection connection = connectionManager.getConnection(client);
             if (connection == null) {
@@ -103,10 +104,12 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
             ConnectionMeta metaInfo = connection.getMetaInfo();
             String clientIp = metaInfo.getClientIp();
             
+            // 构建配置变更通知消息
             ConfigChangeNotifyRequest notifyRequest = ConfigChangeNotifyRequest.build(dataId, group, tenant);
             
             RpcPushTask rpcPushRetryTask = new RpcPushTask(notifyRequest,
                     ConfigCommonConfig.getInstance().getMaxPushRetryTimes(), client, clientIp, metaInfo.getAppName());
+            // 异步推送通知
             push(rpcPushRetryTask, connectionManager);
             notifyClientCount++;
         }
