@@ -292,7 +292,17 @@
     <logger name="com.alibaba.nacos.core.cluster" additivity="false" level="INFO">
         <appender-ref ref="nacos-cluster"/>
     </logger>
-    
+
+    <logger name="com.alibaba.nacos.config.monitorLog" additivity="false">
+        <level value="INFO"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <logger name="com.alibaba.nacos.config" additivity="false">
+        <level value="INFO"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
     <springProfile name="standalone">
         
         <logger name="org.springframework" level="INFO">

@@ -80,9 +80,9 @@ public class NacosConfigService implements ConfigService {
         // 验证初始化参数的合法性
         ValidatorUtils.checkInitParam(clientProperties);
         
-        // 初始化命名空间配置
+        // 初始化命名空间配置，eg: namespace=public
         initNamespace(clientProperties);
-        // 创建配置过滤器链管理器，用于处理配置的加密解密等
+        // 创建配置过滤器链管理器，用于处理配置的加密解密（ConfigEncryptionFilter）等
         this.configFilterChainManager = new ConfigFilterChainManager(clientProperties.asProperties());
         // 创建并启动配置服务器列表管理器，负责维护可用的 Nacos 服务器地址
         ConfigServerListManager serverListManager = new ConfigServerListManager(clientProperties);

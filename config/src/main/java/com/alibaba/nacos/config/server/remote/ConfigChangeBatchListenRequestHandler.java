@@ -55,10 +55,12 @@ public class ConfigChangeBatchListenRequestHandler
     @ExtractorManager.Extractor(rpcExtractor = ConfigBatchListenRequestParamExtractor.class)
     public ConfigChangeBatchListenResponse handle(ConfigBatchListenRequest configChangeListenRequest, RequestMeta meta)
             throws NacosException {
+        // 获取连接ID，用于标识客户端连接
         String connectionId = StringPool.get(meta.getConnectionId());
         String tag = configChangeListenRequest.getHeader(Constants.VIPSERVER_TAG);
         ParamUtils.checkParam(tag);
         ConfigChangeBatchListenResponse configChangeBatchListenResponse = new ConfigChangeBatchListenResponse();
+        // 处理批量监听请求中的每个配置项
         for (ConfigBatchListenRequest.ConfigListenContext listenContext : configChangeListenRequest.getConfigListenContexts()) {
             boolean isNeedTransferNamespace = NamespaceUtil.isNeedTransferNamespace(listenContext.getTenant());
             String namespaceId = NamespaceUtil.processNamespaceParameter(listenContext.getTenant());
@@ -68,14 +70,18 @@ public class ConfigChangeBatchListenRequestHandler
             String md5 = StringPool.get(listenContext.getMd5());
             
             if (configChangeListenRequest.isListen()) {
+                // 添加监听：将客户端连接与配置项关联
                 configChangeListenContext.addListen(groupKey, md5, connectionId, isNeedTransferNamespace);
+                // 检查配置是否已经发生变更
                 boolean isUptoDate = ConfigCacheService.isUptodate(groupKey, md5, meta.getClientIp(), tag,
                         meta.getAppLabels());
                 if (!isUptoDate) {
+                    // 如果配置已变更，立即返回变更通知
                     configChangeBatchListenResponse.addChangeConfig(listenContext.getDataId(), listenContext.getGroup(),
                             listenContext.getTenant());
                 }
             } else {
+                // 移除监听：取消客户端连接与配置项的关联
                 configChangeListenContext.removeListen(groupKey, connectionId);
             }
         }

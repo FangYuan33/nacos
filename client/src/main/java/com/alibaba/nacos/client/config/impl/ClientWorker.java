@@ -541,16 +541,17 @@ public class ClientWorker implements Closeable {
         
         // 创建RPC传输客户端 - 这是长轮询的核心组件
         agent = new ConfigRpcTransportClient(properties, serverListManager);
-        
+
+        // 创建模糊配置 ConfigFuzzyWatchNotifyEvent 和 ConfigFuzzyWatchLoadEvent 事件的监听器
         configFuzzyWatchGroupKeyHolder = new ConfigFuzzyWatchGroupKeyHolder(agent, uuid);
         // 创建调度线程池，用于执行长轮询任务
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(initWorkerThreadCount(properties),
                 new NameThreadFactory("com.alibaba.nacos.client.Worker"));
         agent.setExecutor(executorService);
-        // 启动RPC客户端 - 在这里启动长轮询
+        // 启动RPC客户端，在这里启动长轮询
         agent.start();
+        // 启动模糊配置监听器
         configFuzzyWatchGroupKeyHolder.start();
-        
     }
     
     void initAppLabels(Properties properties) {

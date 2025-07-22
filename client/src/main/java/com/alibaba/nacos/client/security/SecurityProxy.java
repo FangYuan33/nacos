@@ -57,6 +57,7 @@ public class SecurityProxy implements Closeable {
     public SecurityProxy(AbstractServerListManager serverListManager, NacosRestTemplate nacosRestTemplate) {
         clientAuthPluginManager = new ClientAuthPluginManager();
         clientAuthPluginManager.init(serverListManager.getServerList(), nacosRestTemplate);
+        // 注册 server list change 监听器
         NotifyCenter.registerSubscriber(new Subscriber<ServerListChangeEvent>() {
             @Override
             public void onEvent(ServerListChangeEvent event) {
