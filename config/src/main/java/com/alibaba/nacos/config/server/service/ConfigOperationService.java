@@ -92,14 +92,14 @@ public class ConfigOperationService {
         configForm.setEncryptedDataKey(encryptedDataKey);
         ConfigInfo configInfo = new ConfigInfo(configForm.getDataId(), configForm.getGroup(),
                 configForm.getNamespaceId(), configForm.getAppName(), configForm.getContent());
-        //set old md5
+        // set old md5
         if (StringUtils.isNotBlank(configRequestInfo.getCasMd5())) {
             configInfo.setMd5(configRequestInfo.getCasMd5());
         }
         configInfo.setType(configForm.getType());
         configInfo.setEncryptedDataKey(encryptedDataKey);
         
-        //beta publish
+        // beta publish
         if (StringUtils.isNotBlank(configRequestInfo.getBetaIps())) {
             configForm.setGrayName(BetaGrayRule.TYPE_BETA);
             configForm.setGrayRuleExp(configRequestInfo.getBetaIps());
@@ -126,7 +126,7 @@ public class ConfigOperationService {
         
         configMigrateService.publishConfigMigrate(configForm, configRequestInfo, configForm.getEncryptedDataKey());
         
-        // formal publish 根据md5值进行 CAS 更新操作
+        // formal publish 根据md5值进行 CAS 更新操作，先落数据库
         if (StringUtils.isNotBlank(configRequestInfo.getCasMd5())) {
             configOperateResult = configInfoPersistService.insertOrUpdateCas(configRequestInfo.getSrcIp(),
                     configForm.getSrcUser(), configInfo, configAdvanceInfo);
@@ -155,6 +155,7 @@ public class ConfigOperationService {
             }
         }
         // 发布 ConfigDataChangeEvent 配置变更事件
+        // AsyncNotifyService 消费事件通知集群其他节点；DumpService 消费事件创建转存任务
         ConfigChangePublisher.notifyConfigChange(
                 new ConfigDataChangeEvent(configForm.getDataId(), configForm.getGroup(), configForm.getNamespaceId(),
                         configOperateResult.getLastModified()));

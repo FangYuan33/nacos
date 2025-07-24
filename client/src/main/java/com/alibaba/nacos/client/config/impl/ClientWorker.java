@@ -827,7 +827,8 @@ public class ClientWorker implements Closeable {
                     
                 }
             });
-            
+
+            // 注册订阅者
             subscriber = new Subscriber() {
                 @Override
                 public void onEvent(Event event) {
@@ -929,14 +930,14 @@ public class ClientWorker implements Closeable {
             // 执行监听检查，返回是否有变更
             boolean hasChangedKeys = checkListenCache(listenCachesMap);
             
-            // 执行移除监听检查
+            // 执行移除 discard 的配置
             checkRemoveListenCache(removeListenCachesMap);
             
             if (needAllSync) {
                 lastAllSyncTime = now;
             }
 
-            // 如果有变更，重新通知监听配置（形成循环）
+            // 如果有变更，重新通知监听配置（形成循环），再立即处理一遍上述逻辑
             if (hasChangedKeys) {
                 notifyListenConfig();
             }
@@ -1018,7 +1019,7 @@ public class ClientWorker implements Closeable {
         
         private void refreshContentAndCheck(RpcClient rpcClient, CacheData cacheData, boolean notify) {
             try {
-                
+                // 查询配置信息
                 ConfigResponse response = this.queryConfigInner(rpcClient, cacheData.dataId, cacheData.group,
                         cacheData.tenant, requestTimeout, notify);
                 cacheData.setEncryptedDataKey(response.getEncryptedDataKey());
@@ -1031,6 +1032,7 @@ public class ClientWorker implements Closeable {
                             cacheData.dataId, cacheData.group, cacheData.tenant, cacheData.getMd5(),
                             response.getConfigType());
                 }
+                // 检验并通知
                 cacheData.checkListenerMd5();
             } catch (Exception e) {
                 LOGGER.error("refresh content and check md5 fail ,dataId={},group={},tenant={} ", cacheData.dataId,
@@ -1052,6 +1054,7 @@ public class ClientWorker implements Closeable {
                         ConfigBatchListenRequest configChangeListenRequest = buildConfigRequest(removeListenCaches);
                         configChangeListenRequest.setListen(false);
                         try {
+                            // cancel listen
                             boolean removeSuccess = unListenConfigChange(rpcClient, configChangeListenRequest);
                             if (removeSuccess) {
                                 for (CacheData cacheData : removeListenCaches) {
@@ -1071,11 +1074,11 @@ public class ClientWorker implements Closeable {
                             } catch (InterruptedException interruptedException) {
                                 //ignore
                             }
+                            // 发生异常的话立即重试
                             notifyListenConfig();
                         }
                     });
                     listenFutures.add(future);
-                    
                 }
                 for (Future future : listenFutures) {
                     try {
@@ -1116,8 +1119,7 @@ public class ClientWorker implements Closeable {
                             ConfigChangeBatchListenResponse listenResponse = (ConfigChangeBatchListenResponse) requestProxy(
                                     rpcClient, configChangeListenRequest);
                             if (listenResponse != null && listenResponse.isSuccess()) {
-                                
-                                Set<String> changeKeys = new HashSet<String>();
+                                Set<String> changeKeys = new HashSet<>();
                                 
                                 List<ConfigChangeBatchListenResponse.ConfigContext> changedConfigs = listenResponse.getChangedConfigs();
                                 // 获取服务端返回的变更配置列表，并通知监听者
@@ -1136,7 +1138,7 @@ public class ClientWorker implements Closeable {
                                     
                                 }
 
-                                // 某些配置可能通过服务端主动推送得到变更通知，但不在changedConfigs列表中
+                                // 某些配置可能通过服务端主动推送得到变更通知，但不在 changedConfigs 列表中
                                 for (CacheData cacheData : listenCaches) {
                                     if (cacheData.getReceiveNotifyChanged().get()) {
                                         String changeKey = GroupKey.getKeyTenant(cacheData.dataId, cacheData.group,
@@ -1147,8 +1149,7 @@ public class ClientWorker implements Closeable {
                                         }
                                     }
                                 }
-                                
-                                //handler content configs
+
                                 // 处理未变更的配置，标记为与服务端一致
                                 for (CacheData cacheData : listenCaches) {
                                     cacheData.setInitializing(false);
@@ -1199,9 +1200,11 @@ public class ClientWorker implements Closeable {
                 newLabels.put("taskId", taskId);
                 GrpcClientConfig grpcClientConfig = RpcClientConfigFactory.getInstance()
                         .createGrpcClientConfig(properties, newLabels);
+                // 新的创建旧的直接返回
                 RpcClient rpcClient = RpcClientFactory.createClient(uuid + "_config-" + taskId, getConnectionType(),
                         grpcClientConfig);
                 if (rpcClient.isWaitInitiated()) {
+                    // 初始化 RPC Client 处理器，包括配置变更和模糊通知处理器等
                     initRpcClientHandler(rpcClient);
                     rpcClient.setTenant(getTenant());
                     rpcClient.start();
@@ -1219,7 +1222,6 @@ public class ClientWorker implements Closeable {
          * @return request.
          */
         private ConfigBatchListenRequest buildConfigRequest(List<CacheData> caches) {
-            
             ConfigBatchListenRequest configChangeListenRequest = new ConfigBatchListenRequest();
             for (CacheData cacheData : caches) {
                 configChangeListenRequest.addConfigListenContext(cacheData.group, cacheData.dataId, cacheData.tenant,

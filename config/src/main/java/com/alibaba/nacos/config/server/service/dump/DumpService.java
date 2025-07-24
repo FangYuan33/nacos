@@ -151,6 +151,7 @@ public abstract class DumpService {
             DumpRequest dumpRequest = DumpRequest.create(evt.dataId, evt.group, evt.tenant, evt.lastModifiedTs,
                     NetUtils.localIp());
             dumpRequest.setGrayName(evt.grayName);
+            // 执行 dump 转储操作，由 DumpProcessor 处理
             DumpService.this.dump(dumpRequest);
         }
     }

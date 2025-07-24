@@ -99,6 +99,7 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
         Collection<Object> keys = new HashSet<>();
         lock.lock();
         try {
+            // 将 DumpService 执行时添加的 Key 在这里获取，但没有删除操作，而是在后续的步骤中遍历一个加锁删除一个，能够提高处理效率
             keys.addAll(tasks.keySet());
         } finally {
             lock.unlock();
@@ -132,13 +133,14 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
     protected void processTasks() {
         Collection<Object> keys = getAllTaskKeys();
         for (Object taskKey : keys) {
+            // 逐个删除而不是在上面统一删除，删除的时候而且加了锁，这样即使被多个线程拿到多个 Key，也能通过加锁避免执行重复的任务
             AbstractDelayTask task = removeTask(taskKey);
             if (null == task) {
                 continue;
             }
             NacosTaskProcessor processor = getProcessor(taskKey);
             try {
-                // ReAdd task if process failed
+                // ReAdd task if process failed，处理失败或者抛出异常都会重试
                 if (!processor.process(task)) {
                     retryFailedTask(taskKey, task);
                 }

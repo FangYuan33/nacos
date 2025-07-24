@@ -108,20 +108,21 @@ public class AsyncNotifyService {
             ConfigDataChangeEvent evt = (ConfigDataChangeEvent) event;
             
             MetricsMonitor.incrementConfigChangeCount(evt.tenant, evt.group, evt.dataId);
-            
+            // 集群中除了自己的所有节点
             Collection<Member> ipList = memberManager.allMembersWithoutSelf();
             
             // In fact, any type of queue here can be
             Queue<NotifySingleRpcTask> rpcQueue = new LinkedList<>();
             
             for (Member member : ipList) {
-                // grpc report data change only
+                // grpc report data change only 通知其他节点数据变更
                 NotifySingleRpcTask notifySingleRpcTask = generateTask(evt, member);
                 if (notifySingleRpcTask != null) {
                     rpcQueue.add(notifySingleRpcTask);
                 }
                 
             }
+            // 异步执行任务
             if (!rpcQueue.isEmpty()) {
                 ConfigExecutor.executeAsyncNotify(new AsyncRpcTask(rpcQueue));
             }
@@ -172,6 +173,7 @@ public class AsyncNotifyService {
             
             String event = getNotifyEvent(task);
             if (memberManager.hasMember(member.getAddress())) {
+                // 将可能下线的服务放入异步队列延迟执行，健康的服务器直接通知
                 // start the health check and there are ips that are not monitored, put them directly in the notification queue, otherwise notify
                 boolean unHealthNeedDelay = isUnHealthy(member.getAddress());
                 if (unHealthNeedDelay) {
@@ -182,7 +184,6 @@ public class AsyncNotifyService {
                     // get delay time and set fail count to the task
                     asyncTaskExecute(task);
                 } else {
-                    
                     // grpc report data change only
                     try {
                         configClusterRpcClientProxy.syncConfigChange(member, syncRequest,
@@ -191,12 +192,10 @@ public class AsyncNotifyService {
                         MetricsMonitor.getConfigNotifyException().increment();
                         asyncTaskExecute(task);
                     }
-                    
                 }
             } else {
                 //No nothing if  member has offline.
             }
-            
         }
     }
     

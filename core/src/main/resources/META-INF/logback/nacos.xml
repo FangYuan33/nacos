@@ -303,6 +303,11 @@
         <appender-ref ref="CONSOLE"/>
     </logger>
 
+    <Logger name="com.alibaba.nacos.client.config" additivity="false">
+        <level value="INFO"/>
+        <appender-ref ref="CONSOLE"/>
+    </Logger>
+
     <springProfile name="standalone">
         
         <logger name="org.springframework" level="INFO">

@@ -48,8 +48,6 @@ public class ConfigClusterRpcClientProxy {
      */
     public void syncConfigChange(Member member, ConfigChangeClusterSyncRequest request, RequestCallBack callBack)
             throws NacosException {
-    
         clusterRpcClientProxy.asyncRequest(member, request, callBack);
-        
     }
 }
