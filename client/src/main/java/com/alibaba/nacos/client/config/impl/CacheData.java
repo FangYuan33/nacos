@@ -328,8 +328,8 @@ public class CacheData {
     // 检查配置是否发生变更
     void checkListenerMd5() {
         for (ManagerListenerWrap wrap : listeners) {
+            // 配置发生变更，触发监听器
             if (!md5.equals(wrap.lastCallMd5)) {
-                // 配置发生变更，触发监听器
                 safeNotifyListener(dataId, group, content, type, md5, encryptedDataKey, wrap);
             }
         }
@@ -455,13 +455,15 @@ public class CacheData {
                     listener.receiveConfigInfo(contentTmp);
                     // compare lastContent and content
                     if (listener instanceof AbstractConfigChangeListener) {
+                        // 变更监听器 AbstractConfigChangeListener 相关逻辑：变更配置信息并触发变更事件
                         Map<String, ConfigChangeItem> data = ConfigChangeHandler.getInstance()
                                 .parseChangeData(listenerWrap.lastContent, contentTmp, type);
                         ConfigChangeEvent event = new ConfigChangeEvent(data);
                         ((AbstractConfigChangeListener) listener).receiveConfigChange(event);
                         listenerWrap.lastContent = contentTmp;
                     }
-                    
+
+                    // 变更 MD5 信息
                     listenerWrap.lastCallMd5 = md5;
                     LOGGER.info(
                             "[{}] [notify-ok] dataId={}, group={},tenant={}, md5={}, listener={} ,job run cost={} millis.",
@@ -477,13 +479,15 @@ public class CacheData {
                 } finally {
                     listenerWrap.inNotifying = false;
                     Thread.currentThread().setContextClassLoader(myClassLoader);
+                    // 及时通知完成就取消定时任务
                     if (timeSchedule != null) {
                         timeSchedule.cancel(true);
                     }
                 }
             }
         };
-        
+
+        // 执行任务
         try {
             if (null != listener.getExecutor()) {
                 LOGGER.info(

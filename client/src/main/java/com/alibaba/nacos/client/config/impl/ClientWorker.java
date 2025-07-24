@@ -753,11 +753,10 @@ public class ClientWorker implements Closeable {
         
         @SuppressWarnings("PMD.MethodTooLongRule")
         private void initRpcClientHandler(final RpcClient rpcClientInner) {
-            /*
-             * Register Config Change /Config ReSync Handler
-             */
+            // Register Config Change /Config ReSync Handler
+            // 注册 配置变更 或 配置重同步处理器
             rpcClientInner.registerServerRequestHandler((request, connection) -> {
-                //config change notify
+                // config change notify
                 if (request instanceof ConfigChangeNotifyRequest) {
                     return handleConfigChangeNotifyRequest((ConfigChangeNotifyRequest) request,
                             rpcClientInner.getName());
@@ -771,10 +770,11 @@ public class ClientWorker implements Closeable {
                 }
                 return null;
             });
-            
+            // 注册模糊监听处理器
             rpcClientInner.registerServerRequestHandler(
                     new ClientFuzzyWatchNotifyRequestHandler(configFuzzyWatchGroupKeyHolder));
-            
+
+            // 注册链接事件监听器
             rpcClientInner.registerConnectionListener(new ConnectionEventListener() {
                 
                 @Override
