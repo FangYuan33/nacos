@@ -408,6 +408,7 @@ public class CacheData {
     private void safeNotifyListener(final String dataId, final String group, final String content, final String type,
             final String md5, final String encryptedDataKey, final ManagerListenerWrap listenerWrap) {
         final Listener listener = listenerWrap.listener;
+        // 防止重复通知
         if (listenerWrap.inNotifying) {
             LOGGER.warn(
                     "[{}] [notify-currentSkip] dataId={}, group={},tenant={}, md5={}, listener={}, listener is not finish yet,will try next time.",
@@ -424,6 +425,7 @@ public class CacheData {
                 ScheduledFuture<?> timeSchedule = null;
                 
                 try {
+                    // 为 AbstractSharedListener 共享监听器填充上下文信息
                     if (listener instanceof AbstractSharedListener) {
                         AbstractSharedListener adapter = (AbstractSharedListener) listener;
                         adapter.fillContext(dataId, group);
@@ -433,6 +435,7 @@ public class CacheData {
                     // Before executing the callback, set the thread classloader to the classloader of
                     // the specific webapp to avoid exceptions or misuses when calling the spi interface in
                     // the callback method (this problem occurs only in multi-application deployment).
+                    // 在执行回调之前，将线程类加载器设置为特定webapp的类加载器，以避免在回调方法中调用spi接口时出现异常或误用（此问题仅在多应用程序部署中发生）
                     Thread.currentThread().setContextClassLoader(appClassLoader);
                     
                     ConfigResponse cr = new ConfigResponse();
@@ -442,10 +445,12 @@ public class CacheData {
                     cr.setEncryptedDataKey(encryptedDataKey);
                     configFilterChainManager.doFilter(null, cr);
                     String contentTmp = cr.getContent();
+                    // 延期 60s 执行超时告警WARN任务
                     timeSchedule = getNotifyBlockMonitor().schedule(
                             new LongNotifyHandler(listener.getClass().getSimpleName(), dataId, group, tenant, md5,
                                     notifyWarnTimeout, Thread.currentThread()), notifyWarnTimeout,
                             TimeUnit.MILLISECONDS);
+                    // 标记正在通知并触发监听器的回调方法 receiveConfigInfo
                     listenerWrap.inNotifying = true;
                     listener.receiveConfigInfo(contentTmp);
                     // compare lastContent and content

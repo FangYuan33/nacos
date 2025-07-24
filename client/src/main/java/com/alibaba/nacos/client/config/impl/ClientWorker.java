@@ -946,6 +946,7 @@ public class ClientWorker implements Closeable {
         /**
          * Checks and handles local configuration for a given CacheData object. This method evaluates the use of
          * failover files for local configuration storage and updates the CacheData accordingly.
+         * 用于处理本地配置故障转移（failover）机制，用于 Nacos 的高可用场景，当客户端无法连接到 Nacos 服务器时，可以通过本地故障转移文件继续提供配置服务，确保应用程序的正常运行
          *
          * @param cacheData The CacheData object to be processed.
          */
@@ -956,12 +957,15 @@ public class ClientWorker implements Closeable {
             final String envName = cacheData.envName;
             
             // Check if a failover file exists for the specified dataId, group, and tenant.
+            // 校验故障转移文件是否存在
             File file = LocalConfigInfoProcessor.getFailoverFile(envName, dataId, group, tenant);
             
             // If not using local config info and a failover file exists, load and use it.
+            // 如果未使用本地配置信息且故障转移文件存在，加载并使用它。
             if (!cacheData.isUseLocalConfigInfo() && file.exists()) {
                 String content = LocalConfigInfoProcessor.getFailover(envName, dataId, group, tenant);
                 final String md5 = MD5Utils.md5Hex(content, Constants.ENCODE);
+                // 变更为使用本地配置
                 cacheData.setUseLocalConfigInfo(true);
                 cacheData.setLocalConfigInfoVersion(file.lastModified());
                 cacheData.setContent(content);
@@ -971,6 +975,7 @@ public class ClientWorker implements Closeable {
             }
             
             // If use local config info, but the failover file is deleted, switch back to server config.
+            // 如果使用本地配置信息，但故障转移文件被删除，则切换回服务器配置
             if (cacheData.isUseLocalConfigInfo() && !file.exists()) {
                 cacheData.setUseLocalConfigInfo(false);
                 LOGGER.warn("[{}] [failover-change] failover file deleted. dataId={}, group={}, tenant={}", envName,
@@ -979,6 +984,7 @@ public class ClientWorker implements Closeable {
             }
             
             // When the failover file content changes, indicating a change in local configuration.
+            // 使用本地配置，文件存在且文件修改时间发生变更，表示本地配置发生了变化，需要更新本地配置信息
             if (cacheData.isUseLocalConfigInfo() && file.exists()
                     && cacheData.getLocalConfigInfoVersion() != file.lastModified()) {
                 String content = LocalConfigInfoProcessor.getFailover(envName, dataId, group, tenant);
