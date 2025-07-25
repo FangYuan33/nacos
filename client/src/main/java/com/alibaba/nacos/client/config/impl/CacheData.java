@@ -54,6 +54,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * 3. 监听器管理：管理该配置的所有监听器
  * 4. 状态跟踪：跟踪配置与服务端的同步状态
  * 5. 变更检测：通过MD5比较检测配置是否发生变更
+ *
+ * @author FangYuan
  */
 public class CacheData {
     
@@ -113,21 +115,31 @@ public class CacheData {
     
     public final String tenant;
 
-    // 监听器列表
+    /**
+     * 监听器列表.
+     */
     private final CopyOnWriteArrayList<ManagerListenerWrap> listeners;
     
     private volatile String md5;
 
-    // 是否使用本地配置
+    /**
+     * 是否使用本地配置.
+     */
     private volatile boolean isUseLocalConfig = false;
 
-    // 本地配置的最后修改时间
+    /**
+     * 本地配置的最后修改时间.
+     */
     private volatile long localConfigLastModified;
 
-    // 配置内容
+    /**
+     * 配置内容.
+     */
     private volatile String content;
 
-    // 加密密钥
+    /**
+     * 加密密钥.
+     */
     private volatile String encryptedDataKey;
     
     /**
@@ -138,11 +150,13 @@ public class CacheData {
     /**
      * notify change flag,for notify&sync concurrent control. 1.reset to false if starting to sync with server. 2.update
      * to true if receive config change notification.
-     * 是否收到变更通知
+     * 是否收到变更通知.
      */
     private final AtomicBoolean receiveNotifyChanged = new AtomicBoolean(false);
 
-    // 任务 ID
+    /**
+     * 任务 ID.
+     */
     private int taskId;
     
     private volatile boolean isInitializing = true;
@@ -158,7 +172,9 @@ public class CacheData {
      */
     private volatile boolean isDiscard = false;
 
-    // 配置类型(JSON、YAML等)
+    /**
+     * 配置类型(JSON、YAML等).
+     */
     private String type;
     
     public boolean isInitializing() {
@@ -324,8 +340,10 @@ public class CacheData {
     public String toString() {
         return "CacheData [" + dataId + ", " + group + "]";
     }
-    
-    // 检查配置是否发生变更
+
+    /**
+     * 检查配置是否发生变更.
+     */
     void checkListenerMd5() {
         for (ManagerListenerWrap wrap : listeners) {
             // 配置发生变更，触发监听器
