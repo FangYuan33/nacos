@@ -66,41 +66,25 @@ class ConfigLongPollConfigITCase {
     
 //    @LocalServerPort
     private int port;
-    
-    private ConfigService configService;
 
-    private NamingService nacosNamingService;
-    
-    @BeforeAll
-    @AfterAll
+    //    @BeforeAll
+//    @AfterAll
     static void cleanClientCache() throws Exception {
         ConfigCleanUtils.cleanClientCache();
         ConfigCleanUtils.changeToNewTestNacosHome(ConfigLongPollConfigITCase.class.getSimpleName());
         
     }
-    
-    @BeforeEach
-    void init() throws NacosException {
+
+    @Test
+    void test() throws InterruptedException, NacosException {
         Properties properties = new Properties();
         properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8848");
         properties.put(PropertyKeyConst.CONFIG_LONG_POLL_TIMEOUT, "20000");
         properties.put(PropertyKeyConst.CONFIG_RETRY_TIME, "3000");
         properties.put(PropertyKeyConst.MAX_RETRY, "5");
-        configService = NacosFactory.createConfigService(properties);
-//        nacosNamingService = NacosFactory.createNamingService(properties);
-    }
-    
-    @AfterEach
-    void destroy() {
-        try {
-            configService.shutDown();
-        } catch (NacosException ex) {
-            // ignore
-        }
-    }
-    
-    @Test
-    void test() throws InterruptedException, NacosException {
+        ConfigService configService = NacosFactory.createConfigService(properties);
+
+
         MemoryAnalyzer analyzer = new MemoryAnalyzer();
         ThreadPoolAnalyzer threadPoolAnalyzer = new ThreadPoolAnalyzer();
 
@@ -113,7 +97,7 @@ class ConfigLongPollConfigITCase {
         // 创建 ConfigService 的弱引用，用于检测是否被回收
         WeakReference<ConfigService> configServiceRef = new WeakReference<>(configService);
 
-        // 添加多个监听器
+        // 添加监听器
         configService.addListener("default_value", "DEFAULT_GROUP", new Listener() {
             @Override
             public Executor getExecutor() {
@@ -126,19 +110,6 @@ class ConfigLongPollConfigITCase {
             }
         });
 
-        for (int i = 0; i < 500; i++) {
-            configService.addListener("test-" + i, "DEFAULT_GROUP", new Listener() {
-                @Override
-                public Executor getExecutor() {
-                    return null;
-                }
-
-                @Override
-                public void receiveConfigInfo(String configInfo) {
-                    System.out.println(configInfo);
-                }
-            });
-        }
         analyzer.takeSnapshot("添加监听器后");
         threadPoolAnalyzer.takeThreadPoolSnapshot("添加监听器后", configService);
         TimeUnit.SECONDS.sleep(2);
@@ -151,10 +122,10 @@ class ConfigLongPollConfigITCase {
         
         // 在 shutdown 后立即记录线程池状态
         threadPoolAnalyzer.takeThreadPoolSnapshot("shutDown 后", configService);
-        configService = null; // 清除强引用
+        configService = null;
 
         analyzer.takeSnapshot("shutDown 后");
-        TimeUnit.SECONDS.sleep(2);
+        TimeUnit.SECONDS.sleep(8);
 
         System.out.println("=== 第四阶段：强制 GC ===");
         analyzer.forceFullGCWithRetry();
@@ -174,11 +145,367 @@ class ConfigLongPollConfigITCase {
         analyzer.printAnalysisReport();
 
         threadPoolAnalyzer.printAnalysisReport();
+        printActiveThreads();
 
-        // 等待足够时间让 JProfiler 捕获快照
-        System.out.println("等待 JProfiler 分析...");
         // 缩短等待时间
-        TimeUnit.SECONDS.sleep(30);
+        TimeUnit.SECONDS.sleep(3);
+        // 等待足够时间让 JProfiler 捕获快照
+        System.out.println("Profiler 快照分析...");
+        TimeUnit.SECONDS.sleep(10);
+    }
+
+    @Test
+    void testNacosNamingService() throws InterruptedException, NacosException {
+        MemoryAnalyzer analyzer = new MemoryAnalyzer();
+        NamingServiceThreadPoolAnalyzer namingThreadPoolAnalyzer = new NamingServiceThreadPoolAnalyzer();
+
+        System.out.println("=== 第一阶段：Naming Service 初始状态 ===");
+        analyzer.takeSnapshot("Naming 初始状态");
+        TimeUnit.SECONDS.sleep(2);
+
+        System.out.println("=== 第二阶段：创建 NacosNamingService ===");
+        Properties properties = new Properties();
+        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8848");
+        properties.put(PropertyKeyConst.NAMESPACE, "test-namespace");
+        
+        NamingService namingService = NacosFactory.createNamingService(properties);
+        WeakReference<NamingService> namingServiceRef = new WeakReference<>(namingService);
+
+        analyzer.takeSnapshot("创建 NamingService 后");
+        namingThreadPoolAnalyzer.takeThreadPoolSnapshot("创建 NamingService 后", namingService);
+        TimeUnit.SECONDS.sleep(2);
+
+        System.out.println("=== 第三阶段：注册服务实例 ===");
+        try {
+            // 注册一个服务实例
+            namingService.registerInstance("test-service", "127.0.0.1", 8080);
+            
+            // 添加事件监听器
+            namingService.subscribe("test-service", event -> {
+                System.out.println("服务实例变化: " + event);
+            });
+
+            analyzer.takeSnapshot("注册服务和监听器后");
+            namingThreadPoolAnalyzer.takeThreadPoolSnapshot("注册服务和监听器后", namingService);
+            TimeUnit.SECONDS.sleep(3);
+        } catch (Exception e) {
+            System.out.println("服务注册失败(预期，因为服务器可能未启动): " + e.getMessage());
+        }
+
+        System.out.println("=== 第四阶段：执行 shutDown ===");
+        namingThreadPoolAnalyzer.takeThreadPoolSnapshot("shutDown 前", namingService);
+        TimeUnit.SECONDS.sleep(5);
+        
+        namingService.shutDown();
+        namingThreadPoolAnalyzer.takeThreadPoolSnapshot("shutDown 后", namingService);
+        namingService = null;
+
+        analyzer.takeSnapshot("Naming shutDown 后");
+        TimeUnit.SECONDS.sleep(8);
+
+        System.out.println("=== 第五阶段：强制 GC ===");
+        analyzer.forceFullGCWithRetry();
+        analyzer.takeSnapshot("Naming GC 后");
+        
+        // 检查线程池回收状态
+        namingThreadPoolAnalyzer.checkThreadPoolRecycling();
+
+        // 检查 NamingService 是否被回收
+        if (namingServiceRef.get() == null) {
+            System.out.println("✓ NamingService 已被成功回收");
+        } else {
+            System.out.println("⚠ NamingService 仍然存在，可能存在内存泄漏");
+        }
+
+        System.out.println("=== Naming Service 内存分析报告 ===");
+        analyzer.printAnalysisReport();
+        namingThreadPoolAnalyzer.printAnalysisReport();
+        printActiveNamingThreads();
+
+        System.out.println("Naming Service Profiler 快照分析...");
+        TimeUnit.SECONDS.sleep(10);
+        System.out.println("Profiler 快照分析完成");
+    }
+
+    private void printActiveThreads() {
+    System.out.println("=== 活跃线程检查 ===");
+    ThreadGroup rootThreadGroup = Thread.currentThread().getThreadGroup();
+    while (rootThreadGroup.getParent() != null) {
+        rootThreadGroup = rootThreadGroup.getParent();
+    }
+    
+    Thread[] threads = new Thread[rootThreadGroup.activeCount() * 2];
+    int count = rootThreadGroup.enumerate(threads);
+    
+    int nacosThreadCount = 0;
+    for (int i = 0; i < count; i++) {
+        if (threads[i] != null && threads[i].getName().contains("nacos.client.config.listener.task")) {
+            System.out.printf("发现未关闭的 Nacos 线程: %s (状态: %s)\n", 
+                threads[i].getName(), threads[i].getState());
+            nacosThreadCount++;
+        }
+    }
+    
+    if (nacosThreadCount == 0) {
+        System.out.println("✅ 所有 Nacos 相关线程已正确关闭");
+    } else {
+        System.out.printf("❌ 发现 %d 个未关闭的 Nacos 线程\n", nacosThreadCount);
+    }
+}
+
+    private void printActiveNamingThreads() {
+        System.out.println("=== 活跃 Naming 线程检查 ===");
+        ThreadGroup rootThreadGroup = Thread.currentThread().getThreadGroup();
+        while (rootThreadGroup.getParent() != null) {
+            rootThreadGroup = rootThreadGroup.getParent();
+        }
+        
+        Thread[] threads = new Thread[rootThreadGroup.activeCount() * 2];
+        int count = rootThreadGroup.enumerate(threads);
+        
+        int namingThreadCount = 0;
+        for (int i = 0; i < count; i++) {
+            if (threads[i] != null && 
+                (threads[i].getName().contains("nacos.client.naming") || 
+                 threads[i].getName().contains("nacos.client.notify") ||
+                 threads[i].getName().contains("nacos.client.transport"))) {
+                System.out.printf("发现未关闭的 Nacos Naming 线程: %s (状态: %s)\n", 
+                    threads[i].getName(), threads[i].getState());
+                namingThreadCount++;
+            }
+        }
+        
+        if (namingThreadCount == 0) {
+            System.out.println("✅ 所有 Nacos Naming 相关线程已正确关闭");
+        } else {
+            System.out.printf("❌ 发现 %d 个未关闭的 Nacos Naming 线程\n", namingThreadCount);
+        }
+    }
+
+    /**
+     * Naming Service 线程池状态分析器
+     */
+    private static class NamingServiceThreadPoolAnalyzer {
+        private Map<String, WeakReference<ExecutorService>> threadPoolRefs = new HashMap<>();
+        private Map<String, ThreadPoolReflectionUtils.ThreadPoolStatus> lastSnapshot = new HashMap<>();
+        
+        /**
+         * 记录 NamingService 线程池快照
+         */
+        public void takeThreadPoolSnapshot(String phase, NamingService namingService) {
+            System.out.printf("=== %s - Naming Service 线程池状态 ===\n", phase);
+            
+            try {
+                // 获取 NacosNamingService 中的线程池
+                Map<String, ExecutorService> threadPools = NamingServiceReflectionUtils.getAllExecutors(namingService);
+                if (threadPools == null || threadPools.isEmpty()) {
+                    System.out.println("未找到 NamingService 中的线程池");
+                    System.out.println();
+                    return;
+                }
+                
+                System.out.printf("NamingService 包含 %d 个线程池:\n", threadPools.size());
+                
+                for (Map.Entry<String, ExecutorService> entry : threadPools.entrySet()) {
+                    String poolName = entry.getKey();
+                    ExecutorService executor = entry.getValue();
+                    
+                    if (executor != null) {
+                        ThreadPoolReflectionUtils.ThreadPoolStatus status = 
+                            ThreadPoolReflectionUtils.getThreadPoolStatus(executor);
+                        
+                        System.out.printf("  %s: %s\n", poolName, status);
+                        
+                        // 记录弱引用用于回收检测
+                        threadPoolRefs.put(poolName, new WeakReference<>(executor));
+                        
+                        // 打印状态变化
+                        ThreadPoolReflectionUtils.ThreadPoolStatus lastStatus = lastSnapshot.get(poolName);
+                        if (lastStatus != null) {
+                            printNamingStatusDiff(poolName, lastStatus, status);
+                        }
+                        
+                        lastSnapshot.put(poolName, status);
+                    } else {
+                        System.out.printf("  %s: null\n", poolName);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("获取 NamingService 线程池状态失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+            
+            System.out.println();
+        }
+        
+        /**
+         * 检查线程池是否被回收
+         */
+        public void checkThreadPoolRecycling() {
+            System.out.println("=== 检查 Naming Service 线程池回收状态 ===");
+            
+            int totalPools = threadPoolRefs.size();
+            int recycledPools = 0;
+            
+            for (Map.Entry<String, WeakReference<ExecutorService>> entry : threadPoolRefs.entrySet()) {
+                String poolName = entry.getKey();
+                ExecutorService executor = entry.getValue().get();
+                
+                if (executor == null) {
+                    System.out.printf("✓ %s 已被回收\n", poolName);
+                    recycledPools++;
+                } else {
+                    System.out.printf("⚠ %s 仍然存在 (shutdown: %s, terminated: %s)\n", 
+                        poolName, executor.isShutdown(), executor.isTerminated());
+                }
+            }
+            
+            System.out.printf("Naming Service 回收统计: %d/%d 个线程池已被回收 (%.2f%%)\n",
+                recycledPools, totalPools,
+                totalPools > 0 ? (double) recycledPools / totalPools * 100 : 0);
+            
+            if (recycledPools < totalPools) {
+                System.out.println("❌ 部分 Naming Service 线程池未被正确回收");
+            } else {
+                System.out.println("✅ 所有 Naming Service 线程池已被正确回收");
+            }
+            
+            System.out.println();
+        }
+        
+        /**
+         * 打印状态变化
+         */
+        private void printNamingStatusDiff(String poolName, ThreadPoolReflectionUtils.ThreadPoolStatus before,
+                                          ThreadPoolReflectionUtils.ThreadPoolStatus after) {
+            if (before.isShutdown != after.isShutdown) {
+                System.out.printf("    %s shutdown: %s -> %s\n", poolName, before.isShutdown, after.isShutdown);
+            }
+            if (before.isTerminated != after.isTerminated) {
+                System.out.printf("    %s terminated: %s -> %s\n", poolName, before.isTerminated, after.isTerminated);
+            }
+            if (before.activeCount != after.activeCount) {
+                System.out.printf("    %s active threads: %d -> %d\n", poolName, before.activeCount, after.activeCount);
+            }
+        }
+        
+        /**
+         * 生成分析报告
+         */
+        public void printAnalysisReport() {
+            System.out.println("=== Naming Service 线程池分析报告 ===");
+            
+            for (Map.Entry<String, ThreadPoolReflectionUtils.ThreadPoolStatus> entry : lastSnapshot.entrySet()) {
+                String poolName = entry.getKey();
+                ThreadPoolReflectionUtils.ThreadPoolStatus status = entry.getValue();
+                
+                System.out.printf("%s 最终状态:\n", poolName);
+                System.out.printf("  - Shutdown: %s\n", status.isShutdown);
+                System.out.printf("  - Terminated: %s\n", status.isTerminated);
+                System.out.printf("  - Active Count: %d\n", status.activeCount);
+                System.out.printf("  - Pool Size: %d\n", status.poolSize);
+                System.out.printf("  - Task Count: %d\n", status.taskCount);
+                System.out.printf("  - Completed Task Count: %d\n", status.completedTaskCount);
+            }
+        }
+    }
+
+    /**
+     * Naming Service 反射工具类 - 用于获取 NamingService 内部线程池状态
+     */
+    private static class NamingServiceReflectionUtils {
+        
+        /**
+         * 获取 NamingService 中的所有线程池
+         */
+        @SuppressWarnings("unchecked")
+        public static Map<String, ExecutorService> getAllExecutors(NamingService namingService) {
+            Map<String, ExecutorService> executors = new HashMap<>();
+            
+            try {
+                // 获取 NacosNamingService 中的 clientProxy 字段
+                Field clientProxyField = namingService.getClass().getDeclaredField("clientProxy");
+                clientProxyField.setAccessible(true);
+                Object clientProxy = clientProxyField.get(namingService);
+                
+                if (clientProxy != null) {
+                    // 尝试获取代理中的执行器
+                    try {
+                        Field executorField = clientProxy.getClass().getDeclaredField("executor");
+                        executorField.setAccessible(true);
+                        ExecutorService executor = (ExecutorService) executorField.get(clientProxy);
+                        if (executor != null) {
+                            executors.put("clientProxy.executor", executor);
+                        }
+                    } catch (Exception e) {
+                        // 忽略，可能不存在此字段
+                    }
+                    
+                    // 尝试获取其他可能的执行器
+                    Field[] fields = clientProxy.getClass().getDeclaredFields();
+                    for (Field field : fields) {
+                        if (ExecutorService.class.isAssignableFrom(field.getType())) {
+                            field.setAccessible(true);
+                            ExecutorService executor = (ExecutorService) field.get(clientProxy);
+                            if (executor != null) {
+                                executors.put("clientProxy." + field.getName(), executor);
+                            }
+                        }
+                    }
+                }
+                
+                // 获取 serviceInfoHolder 中的执行器
+                try {
+                    Field serviceInfoHolderField = namingService.getClass().getDeclaredField("serviceInfoHolder");
+                    serviceInfoHolderField.setAccessible(true);
+                    Object serviceInfoHolder = serviceInfoHolderField.get(namingService);
+                    
+                    if (serviceInfoHolder != null) {
+                        Field[] fields = serviceInfoHolder.getClass().getDeclaredFields();
+                        for (Field field : fields) {
+                            if (ExecutorService.class.isAssignableFrom(field.getType())) {
+                                field.setAccessible(true);
+                                ExecutorService executor = (ExecutorService) field.get(serviceInfoHolder);
+                                if (executor != null) {
+                                    executors.put("serviceInfoHolder." + field.getName(), executor);
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // 忽略，可能不存在此字段
+                }
+                
+                // 获取 changeNotifier 中的执行器
+                try {
+                    Field changeNotifierField = namingService.getClass().getDeclaredField("changeNotifier");
+                    changeNotifierField.setAccessible(true);
+                    Object changeNotifier = changeNotifierField.get(namingService);
+                    
+                    if (changeNotifier != null) {
+                        Field[] fields = changeNotifier.getClass().getDeclaredFields();
+                        for (Field field : fields) {
+                            if (ExecutorService.class.isAssignableFrom(field.getType())) {
+                                field.setAccessible(true);
+                                ExecutorService executor = (ExecutorService) field.get(changeNotifier);
+                                if (executor != null) {
+                                    executors.put("changeNotifier." + field.getName(), executor);
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // 忽略，可能不存在此字段
+                }
+                
+            } catch (Exception e) {
+                System.err.println("获取 NamingService 执行器失败: " + e.getMessage());
+                e.printStackTrace();
+                return null;
+            }
+            
+            return executors;
+        }
     }
 
     /**
