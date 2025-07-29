@@ -81,7 +81,7 @@ public class ConfigOperationService {
     
     /**
      * Adds or updates non-aggregated data.
-     *
+     * [notifyConfig] 步骤2: 配置发布的核心业务逻辑，负责将配置持久化到数据库并发布配置变更事件
      * @throws NacosException NacosException.
      */
     @SuppressWarnings("PMD.MethodTooLongRule")
@@ -154,7 +154,7 @@ public class ConfigOperationService {
                 }
             }
         }
-        // 发布 ConfigDataChangeEvent 配置变更事件
+        // [notifyConfig] 步骤3: 发布 ConfigDataChangeEvent 配置变更事件，这是触发客户端通知的关键步骤
         // AsyncNotifyService 消费事件通知集群其他节点；DumpService 消费事件创建转存任务
         ConfigChangePublisher.notifyConfigChange(
                 new ConfigDataChangeEvent(configForm.getDataId(), configForm.getGroup(), configForm.getNamespaceId(),

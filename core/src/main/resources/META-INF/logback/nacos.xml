@@ -244,7 +244,7 @@
         </encoder>
     </appender>
     
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="rootFile"/>
         <appender-ref ref="CONSOLE"/>
     </root>
@@ -311,6 +311,16 @@
 
     <Logger name="com.alibaba.nacos.core.auth" additivity="false">
         <level value="DEBUG"/>
+        <appender-ref ref="CONSOLE"/>
+    </Logger>
+
+    <Logger name="com.alibaba.nacos.config.traceLog" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="CONSOLE"/>
+    </Logger>
+
+    <Logger name="io.grpc.netty.shaded.io.grpc.netty" additivity="false">
+        <level value="INFO"/>
         <appender-ref ref="CONSOLE"/>
     </Logger>
 

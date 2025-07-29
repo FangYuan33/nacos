@@ -364,6 +364,7 @@ public class ConfigCacheService {
             configCache.setLastModifiedTs(lastModifiedTs);
             configCache.setEncryptedDataKey(encryptedDataKey);
             ConfigCachePostProcessorDelegate.getInstance().postProcess(configCache, content);
+            // [notify]  LocalDataChangeEvent
             NotifyCenter.publishEvent(new LocalDataChangeEvent(groupKey));
         }
     }

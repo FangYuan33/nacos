@@ -112,7 +112,7 @@ class ConfigLongPollConfigITCase {
 
         analyzer.takeSnapshot("添加监听器后");
         threadPoolAnalyzer.takeThreadPoolSnapshot("添加监听器后", configService);
-        TimeUnit.SECONDS.sleep(2);
+        TimeUnit.HOURS.sleep(2);
 
         System.out.println("=== 第三阶段：执行 shutDown ===");
         // 在 shutdown 前记录线程池状态

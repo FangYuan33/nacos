@@ -104,6 +104,7 @@ public class ConsoleConfigController {
     /**
      * Add or update configuration.
      * 新增或修改配置的入口
+     * [notifyConfig] 步骤1: 控制层接收配置发布请求，这是整个配置变更通知流程的起点
      * @param request    HTTP servlet request.
      * @param configForm Configuration form.
      * @return Result containing success status.
