@@ -570,7 +570,6 @@ public class ClientWorker implements Closeable {
     }
     
     private void init(NacosClientProperties properties) {
-        
         requestTimeout = ConvertUtils.toLong(properties.getProperty(PropertyKeyConst.CONFIG_REQUEST_TIMEOUT, "-1"));
         
         this.enableRemoteSyncConfig = Boolean.parseBoolean(

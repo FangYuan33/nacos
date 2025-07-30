@@ -84,7 +84,6 @@ class ConfigLongPollConfigITCase {
         properties.put(PropertyKeyConst.MAX_RETRY, "5");
         ConfigService configService = NacosFactory.createConfigService(properties);
 
-
         MemoryAnalyzer analyzer = new MemoryAnalyzer();
         ThreadPoolAnalyzer threadPoolAnalyzer = new ThreadPoolAnalyzer();
 

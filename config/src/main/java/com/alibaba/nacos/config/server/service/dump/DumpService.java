@@ -55,7 +55,7 @@ import static com.alibaba.nacos.config.server.utils.LogUtil.DUMP_LOG;
 
 /**
  * Dump data service.
- * [notifyConfig] 步骤4: DumpService 负责监听配置变更事件，将配置从数据库转存到本地缓存，并触发客户端通知
+ * [notifyConfig] server 步骤4: DumpService 负责监听配置变更事件，将配置从数据库转存到本地缓存，并触发客户端通知
  * @author Nacos
  */
 @SuppressWarnings("PMD.AbstractClassShouldStartWithAbstractNamingRule")
@@ -130,7 +130,7 @@ public abstract class DumpService {
         this.dumpAllTaskMgr.addProcessor(DumpAllGrayTask.TASK_ID, dumpAllGrayProcessor);
         DynamicDataSource.getInstance().getDataSource();
         
-        // [notifyConfig] 步骤5: 注册事件订阅者，监听 ConfigDataChangeEvent 配置变更事件
+        // [notifyConfig] server 步骤5: 注册事件订阅者，监听 ConfigDataChangeEvent 配置变更事件
         NotifyCenter.registerSubscriber(new Subscriber() {
             
             @Override

@@ -163,7 +163,7 @@ public class LongPollingService {
     
     /**
      * Add LongPollingClient.
-     * [notifyConfig] 步骤6a: 处理客户端长轮询请求，将客户端加入等待队列
+     * [notifyConfig] server 步骤6a: 处理客户端长轮询请求，将客户端加入等待队列
      * @param req              HttpServletRequest.
      * @param rsp              HttpServletResponse.
      * @param clientMd5Map     clientMd5Map.
@@ -269,7 +269,7 @@ public class LongPollingService {
     class DataChangeTask implements Runnable {
         
         /**
-         * [notifyConfig] 步骤6b: 配置变更时，遍历所有长轮询客户端，通知监听该配置的客户端
+         * [notifyConfig] server 步骤6b: 配置变更时，遍历所有长轮询客户端，通知监听该配置的客户端
          */
         @Override
         public void run() {
@@ -287,7 +287,7 @@ public class LongPollingService {
                                 "in-advance",
                                 RequestUtil.getRemoteIp((HttpServletRequest) clientSub.asyncContext.getRequest()),
                                 "polling", clientSub.clientMd5Map.size(), clientSub.probeRequestSize, groupKey);
-                        // [notifyConfig] 步骤6c: 发送响应给客户端，通知配置已变更        
+                        // [notifyConfig] server 步骤6c: 发送响应给客户端，通知配置已变更
                         clientSub.sendResponse(Collections.singletonMap(groupKey, clientSub.clientMd5Map.get(groupKey)));
                     }
                 }
@@ -319,7 +319,7 @@ public class LongPollingService {
     public class ClientLongPolling implements Runnable {
         
         /**
-         * [notifyConfig] 步骤6d: 长轮询客户端执行逻辑，将自己加入等待队列并设置超时任务
+         * [notifyConfig] server 步骤6d: 长轮询客户端执行逻辑，将自己加入等待队列并设置超时任务
          */
         @Override
         public void run() {
@@ -347,7 +347,7 @@ public class LongPollingService {
                 
             }, timeoutTime, TimeUnit.MILLISECONDS);
             
-            // [notifyConfig] 步骤6e: 关键步骤，将自己添加到全局长轮询队列中，等待配置变更通知
+            // [notifyConfig] server 步骤6e: 关键步骤，将自己添加到全局长轮询队列中，等待配置变更通知
             allSubs.add(this);
         }
         
