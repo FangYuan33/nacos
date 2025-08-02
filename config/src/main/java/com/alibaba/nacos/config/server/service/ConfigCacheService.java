@@ -114,6 +114,7 @@ public class ConfigCacheService {
             if (md5Changed) {
                 DUMP_LOG.info("[dump] md5 changed, save to disk cache ,groupKey={}, newMd5={},oldMd5={}", groupKey, md5,
                         localContentMd5);
+                // 写入到本地文件中
                 ConfigDiskServiceFactory.getInstance().saveToDisk(dataId, group, tenant, content);
             } else {
                 DUMP_LOG.warn("[dump-ignore] ignore to save to disk cache. md5 consistent,groupKey={}, md5={}",
@@ -364,7 +365,7 @@ public class ConfigCacheService {
             configCache.setLastModifiedTs(lastModifiedTs);
             configCache.setEncryptedDataKey(encryptedDataKey);
             ConfigCachePostProcessorDelegate.getInstance().postProcess(configCache, content);
-            // [notify]  LocalDataChangeEvent
+            // [notifyConfig] server 步骤9: 更新本地JVM缓存后，发布LocalDataChangeEvent事件以通知客户端配置变更
             NotifyCenter.publishEvent(new LocalDataChangeEvent(groupKey));
         }
     }

@@ -34,6 +34,9 @@ public class DumpConfigHandler extends Subscriber<ConfigDumpEvent> {
     
     /**
      * trigger config dump event.
+     * [notifyConfig] server 步骤8: 执行配置转储操作
+     * 将配置内容写入本地缓存和磁盘文件，同时发布 LocalDataChangeEvent 事件
+     * 作用：更新本地配置缓存，触发客户端通知
      *
      * @param event {@link ConfigDumpEvent}
      * @return {@code true} if the config dump task success , else {@code false}

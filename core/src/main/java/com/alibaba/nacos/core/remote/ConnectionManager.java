@@ -49,6 +49,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * connect manager.
+ * 
+ * [clientConnection] 流程总览：客户端与服务端gRPC连接建立的完整流程
+ * 客户端步骤1-13：创建执行器→计算端口→建立通道→健康检查→获取连接ID→创建双向流→绑定流→发送连接请求→等待确认
+ * 服务端步骤14-29：接收流请求→解析数据包→处理连接请求→创建连接信息→注册到ConnectionManager→发送SetupAck响应
+ * 客户端步骤30-32：接收SetupAck→完成能力协商→连接建立成功，双向gRPC通信正式建立
  *
  * @author liuzunfei
  * @version $Id: ConnectionManager.java, v 0.1 2020年07月13日 7:07 PM liuzunfei Exp $
@@ -103,18 +108,24 @@ public class ConnectionManager {
         
         if (connection.isConnected()) {
             String clientIp = connection.getMetaInfo().clientIp;
+            // [clientConnection] 步骤24：检查连接ID是否已存在，避免重复注册
             if (connections.containsKey(connectionId)) {
                 return true;
             }
+            // [clientConnection] 步骤25：检查连接数量限制，防止过载
             if (checkLimit(connection)) {
                 return false;
             }
+            // [clientConnection] 步骤26：设置连接跟踪状态，用于调试和监控
             if (traced(clientIp)) {
                 connection.setTraced(true);
             }
+            // [clientConnection] 步骤27：将连接保存到ConnectionManager的连接映射表中
             connections.put(connectionId, connection);
+            // [clientConnection] 步骤28：更新客户端IP的连接计数器
             connectionForClientIp.computeIfAbsent(clientIp, k -> new AtomicInteger(0)).getAndIncrement();
             
+            // [clientConnection] 步骤29：通知连接事件监听器，客户端连接成功建立
             clientConnectionEventListenerRegistry.notifyClientConnected(connection);
             
             LOGGER.info("new connection registered successfully, connectionId = {},connection={} ", connectionId,

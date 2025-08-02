@@ -711,7 +711,6 @@ public class ClientWorker implements Closeable {
         }
         
         private Map<String, String> getLabels() {
-            
             Map<String, String> labels = new HashMap<>(2, 1);
             labels.put(RemoteConstants.LABEL_SOURCE, RemoteConstants.LABEL_SOURCE_SDK);
             labels.put(RemoteConstants.LABEL_MODULE, RemoteConstants.LABEL_MODULE_CONFIG);
@@ -730,13 +729,13 @@ public class ClientWorker implements Closeable {
             return labels;
         }
         
-        // 当服务端配置变更时，处理配置变更通知请求
+        // [notifyConfig] client 步骤17: 客户端接收服务端推送的配置变更通知请求
         ConfigChangeNotifyResponse handleConfigChangeNotifyRequest(ConfigChangeNotifyRequest configChangeNotifyRequest,
                 String clientName) {
             LOGGER.info("[{}] [server-push] config changed. dataId={}, group={},tenant={}", clientName,
                     configChangeNotifyRequest.getDataId(), configChangeNotifyRequest.getGroup(),
                     configChangeNotifyRequest.getTenant());
-            // 构建配置唯一标识
+            // [notifyConfig] client 步骤18: 构建配置唯一标识，查找对应的本地缓存数据
             String groupKey = GroupKey.getKeyTenant(configChangeNotifyRequest.getDataId(),
                     configChangeNotifyRequest.getGroup(), configChangeNotifyRequest.getTenant());
             
@@ -744,7 +743,7 @@ public class ClientWorker implements Closeable {
             CacheData cacheData = cacheMap.get().get(groupKey);
             if (cacheData != null) {
                 synchronized (cacheData) {
-                    // 标记收到变更通知
+                    // [notifyConfig] client 步骤19: 标记配置状态变更，触发配置拉取和监听器通知
                     cacheData.getReceiveNotifyChanged().set(true);
                     // 标记与服务端不一致
                     cacheData.setConsistentWithServer(false);
@@ -939,6 +938,7 @@ public class ClientWorker implements Closeable {
             }
             
             // 执行监听检查，返回是否有变更
+            // [notifyConfig] client 步骤20a: 从服务端查询最新配置内容并触发监听器回调
             boolean hasChangedKeys = checkListenCache(listenCachesMap);
             
             // 执行移除 discard 的配置
@@ -1028,9 +1028,10 @@ public class ClientWorker implements Closeable {
             }
         }
         
+        // [notifyConfig] client 步骤20b: 从服务端查询最新配置内容并触发监听器回调
         private void refreshContentAndCheck(RpcClient rpcClient, CacheData cacheData, boolean notify) {
             try {
-                // 查询配置信息
+                // [notifyConfig] client 步骤21: 向服务端查询最新的配置内容，并写入 CacheData 中
                 ConfigResponse response = this.queryConfigInner(rpcClient, cacheData.dataId, cacheData.group,
                         cacheData.tenant, requestTimeout, notify);
                 cacheData.setEncryptedDataKey(response.getEncryptedDataKey());
@@ -1043,7 +1044,7 @@ public class ClientWorker implements Closeable {
                             cacheData.dataId, cacheData.group, cacheData.tenant, cacheData.getMd5(),
                             response.getConfigType());
                 }
-                // 检验并通知
+                // [notifyConfig] client 步骤22: 检查配置MD5变化并触发监听器回调通知应用程序
                 cacheData.checkListenerMd5();
             } catch (Exception e) {
                 LOGGER.error("refresh content and check md5 fail ,dataId={},group={},tenant={} ", cacheData.dataId,

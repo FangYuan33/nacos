@@ -81,7 +81,6 @@ public class ConfigOperationService {
     
     /**
      * Adds or updates non-aggregated data.
-     * [notifyConfig] server 步骤2: 配置发布的核心业务逻辑，负责将配置持久化到数据库并发布配置变更事件
      * @throws NacosException NacosException.
      */
     @SuppressWarnings("PMD.MethodTooLongRule")

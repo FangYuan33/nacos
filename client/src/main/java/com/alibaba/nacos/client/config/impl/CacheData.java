@@ -365,6 +365,7 @@ public class CacheData {
     /**
      * 检查配置是否发生变更.
      */
+    // [notifyConfig] client 步骤22: 遍历所有监听器，检查MD5是否变更，若变更则调用 safeNotifyListener 触发用户监听器
     void checkListenerMd5() {
         for (ManagerListenerWrap wrap : listeners) {
             // 配置发生变更，触发监听器
@@ -444,6 +445,7 @@ public class CacheData {
     }
 
     @SuppressWarnings("PMD.MethodTooLongRule")
+    // [notifyConfig] client 步骤23: 安全地通知监听器，调用用户的receiveConfigInfo方法，完成配置变更通知
     private void safeNotifyListener(final String dataId, final String group, final String content, final String type,
             final String md5, final String encryptedDataKey, final ManagerListenerWrap listenerWrap) {
         final Listener listener = listenerWrap.listener;

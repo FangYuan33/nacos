@@ -244,8 +244,8 @@
         </encoder>
     </appender>
     
-    <root level="DEBUG">
-        <appender-ref ref="rootFile"/>
+    <root level="INFO">
+<!--        <appender-ref ref="rootFile"/>-->
         <appender-ref ref="CONSOLE"/>
     </root>
     
@@ -321,6 +321,11 @@
 
     <Logger name="io.grpc.netty.shaded.io.grpc.netty" additivity="false">
         <level value="INFO"/>
+        <appender-ref ref="CONSOLE"/>
+    </Logger>
+
+    <Logger name="com.alibaba.nacos.core.remote.push" additivity="false">
+        <level value="DEBUG"/>
         <appender-ref ref="CONSOLE"/>
     </Logger>
 

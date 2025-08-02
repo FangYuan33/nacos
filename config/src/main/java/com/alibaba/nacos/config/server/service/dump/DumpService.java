@@ -55,7 +55,6 @@ import static com.alibaba.nacos.config.server.utils.LogUtil.DUMP_LOG;
 
 /**
  * Dump data service.
- * [notifyConfig] server 步骤4: DumpService 负责监听配置变更事件，将配置从数据库转存到本地缓存，并触发客户端通知
  * @author Nacos
  */
 @SuppressWarnings("PMD.AbstractClassShouldStartWithAbstractNamingRule")
@@ -130,7 +129,6 @@ public abstract class DumpService {
         this.dumpAllTaskMgr.addProcessor(DumpAllGrayTask.TASK_ID, dumpAllGrayProcessor);
         DynamicDataSource.getInstance().getDataSource();
         
-        // [notifyConfig] server 步骤5: 注册事件订阅者，监听 ConfigDataChangeEvent 配置变更事件
         NotifyCenter.registerSubscriber(new Subscriber() {
             
             @Override
@@ -145,6 +143,11 @@ public abstract class DumpService {
         });
     }
     
+    /**
+     * [notifyConfig] server 步骤4: 监听并处理 ConfigDataChangeEvent 事件
+     * 将 ConfigDataChangeEvent 转换为 DumpRequest，交给 DumpProcessor 处理
+     * 作用：将配置变更事件转换为配置转储任务，更新本地缓存
+     */
     void handleConfigDataChange(Event event) {
         // Generate ConfigDataChangeEvent concurrently
         if (event instanceof ConfigDataChangeEvent) {
@@ -289,7 +292,9 @@ public abstract class DumpService {
     
     /**
      * dump operation.
-     *
+     * [notifyConfig] server 步骤5: 处理 dump 转储请求
+     * 根据是否是灰度配置，调用不同的转储方法
+     * 
      * @param dumpRequest dumpRequest.
      */
     public void dump(DumpRequest dumpRequest) {
@@ -304,6 +309,9 @@ public abstract class DumpService {
     
     /**
      * dump formal config.
+     * [notifyConfig] server 步骤6: 正式配置转储
+     * 创建 DumpTask 任务，交给 DumpProcessor 处理
+     * 作用：将配置变更转换为异步任务
      *
      * @param dataId       dataId.
      * @param group        group.

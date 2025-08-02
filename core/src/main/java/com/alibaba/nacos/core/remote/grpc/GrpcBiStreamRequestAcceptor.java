@@ -72,6 +72,7 @@ public class GrpcBiStreamRequestAcceptor extends BiRequestStreamGrpc.BiRequestSt
     
     @Override
     public StreamObserver<Payload> requestBiStream(StreamObserver<Payload> responseObserver) {
+        // [clientConnection] 步骤14：服务端接收客户端双向流连接请求，创建流观察器
         StreamObserver<Payload> streamObserver = new StreamObserver<>() {
             final String connectionId = GrpcServerConstants.CONTEXT_KEY_CONN_ID.get();
             
@@ -85,6 +86,7 @@ public class GrpcBiStreamRequestAcceptor extends BiRequestStreamGrpc.BiRequestSt
             
             @Override
             public void onNext(Payload payload) {
+                // [clientConnection] 步骤15：服务端接收客户端发送的数据包，进行解析处理
                 streamObserverOnNext(payload, connectionId, localPort, remotePort, remoteIp, responseObserver);
             }
             
@@ -138,6 +140,7 @@ public class GrpcBiStreamRequestAcceptor extends BiRequestStreamGrpc.BiRequestSt
         traceDetailIfNecessary(payload);
         Object parseObj;
         try {
+            // [clientConnection] 步骤16：解析客户端发送的数据包，提取请求对象
             parseObj = GrpcUtils.parse(payload);
         } catch (Throwable throwable) {
             Loggers.REMOTE_DIGEST.warn("[{}]Grpc request bi stream,payload parse error={}", connectionId, throwable);
@@ -149,12 +152,14 @@ public class GrpcBiStreamRequestAcceptor extends BiRequestStreamGrpc.BiRequestSt
             return;
         }
         if (parseObj instanceof ConnectionSetupRequest) {
+            // [clientConnection] 步骤17：处理连接建立请求，提取客户端信息
             ConnectionSetupRequest setUpRequest = (ConnectionSetupRequest) parseObj;
             Map<String, String> labels = setUpRequest.getLabels();
             String appName = "-";
             if (labels != null && labels.containsKey(Constants.APPNAME)) {
                 appName = labels.get(Constants.APPNAME);
             }
+            // [clientConnection] 步骤18：创建连接元信息，包含客户端IP、端口、版本等
             ConnectionMeta metaInfo = new ConnectionMeta(connectionId, payload.getMetadata().getClientIp(), remoteIp,
                     remotePort, localPort, ConnectionType.GRPC.getType(), setUpRequest.getClientVersion(), appName,
                     setUpRequest.getLabels());
@@ -162,16 +167,19 @@ public class GrpcBiStreamRequestAcceptor extends BiRequestStreamGrpc.BiRequestSt
             Channel channel = GrpcServerConstants.CONTEXT_KEY_CHANNEL.get();
             Attribute<Boolean> tlsProtected = channel.attr(AttributeKey.valueOf("TLS_PROTECTED"));
             metaInfo.setTlsProtected(tlsProtected != null && tlsProtected.get() != null && tlsProtected.get());
+            // [clientConnection] 步骤19：创建服务端连接对象，绑定响应流和通道
             Connection connection = ConnectionGeneratorServiceDelegate.getInstance()
                     .getConnection(metaInfo, responseObserver, GrpcServerConstants.CONTEXT_KEY_CHANNEL.get());
             // null if supported
             if (setUpRequest.getAbilityTable() != null) {
                 // map to table
+                // [clientConnection] 步骤20：设置客户端能力表，用于功能协商
                 connection.setAbilityTable(setUpRequest.getAbilityTable());
             }
             boolean rejectSdkOnStarting = metaInfo.isSdkSource() && !ApplicationUtils.isStarted();
             if (rejectSdkOnStarting || !connectionManager.register(connectionId, connection)) {
                 //Not register to the connection manager if current server is over limit or server is starting.
+                // [clientConnection] 步骤21：连接注册失败，拒绝连接并清理资源
                 try {
                     Loggers.REMOTE_DIGEST.warn("[{}]Connection register fail,reason:{}", connectionId,
                             rejectSdkOnStarting ? " server is not started" : " server is over limited.");
@@ -183,6 +191,7 @@ public class GrpcBiStreamRequestAcceptor extends BiRequestStreamGrpc.BiRequestSt
                     }
                 }
             } else {
+                // [clientConnection] 步骤22：连接注册成功，发送能力协商响应给客户端
                 try {
                     // server sends abilities only when:
                     //      1. client sends setUpRequest with its abilities table
@@ -190,6 +199,7 @@ public class GrpcBiStreamRequestAcceptor extends BiRequestStreamGrpc.BiRequestSt
                     if (setUpRequest.getAbilityTable() != null) {
                         // finish register, tell client has set up successfully
                         // async response without client ack
+                        // [clientConnection] 步骤23：发送SetupAck响应，告知客户端连接建立成功
                         connection.sendRequestNoAck(new SetupAckRequest(
                                 NacosAbilityManagerHolder.getInstance().getCurrentNodeAbilities(AbilityMode.SERVER)));
                     }

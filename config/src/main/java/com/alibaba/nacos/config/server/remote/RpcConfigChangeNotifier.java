@@ -84,6 +84,7 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
      *
      * @param groupKey groupKey
      */
+    // [notifyConfig] server 步骤11: 获取监听该配置的所有客户端连接，为每个客户端创建推送任务
     public void configDataChanged(String groupKey, String dataId, String group, String tenant) {
         
         Set<String> listeners = configChangeListenContext.getListeners(groupKey);
@@ -104,9 +105,10 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
             ConnectionMeta metaInfo = connection.getMetaInfo();
             String clientIp = metaInfo.getClientIp();
             
-            // 构建配置变更通知消息
+            // [notifyConfig] server 步骤12: 构建ConfigChangeNotifyRequest消息，包含变更的配置信息
             ConfigChangeNotifyRequest notifyRequest = ConfigChangeNotifyRequest.build(dataId, group, tenant);
             
+            // [notifyConfig] server 步骤13: 创建RpcPushTask异步推送任务，支持重试机制
             RpcPushTask rpcPushRetryTask = new RpcPushTask(notifyRequest,
                     ConfigCommonConfig.getInstance().getMaxPushRetryTimes(), client, clientIp, metaInfo.getAppName());
             // 异步推送通知
@@ -124,9 +126,9 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
         String dataId = strings[0];
         String group = strings[1];
         String tenant = strings.length > 2 ? strings[2] : "";
-        
+
+        // [notifyConfig] server 步骤10: 监听LocalDataChangeEvent事件，通过gRPC双向流推送配置变更通知到客户端
         configDataChanged(groupKey, dataId, group, tenant);
-        
     }
     
     @Override
@@ -192,8 +194,10 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
             
             tpsCheckRequest.setPointName(POINT_CONFIG_PUSH);
             if (!tpsControlManager.check(tpsCheckRequest).isSuccess()) {
+                // [notifyConfig] server 步骤14a: TPS限流检查失败，延迟重试推送任务
                 push(this, connectionManager);
             } else {
+                // [notifyConfig] server 步骤14b: TPS检查通过，通过gRPC连接推送配置变更通知到客户端
                 rpcPushService.pushWithCallback(connectionId, notifyRequest,
                         new RpcPushCallback(this, tpsControlManager, connectionManager),
                         ConfigExecutor.getClientConfigNotifierServiceExecutor());
@@ -219,6 +223,7 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
         
         @Override
         public void onSuccess() {
+            // [notifyConfig] server 步骤15a: 客户端成功接收配置变更通知，记录推送成功统计
             TpsCheckRequest tpsCheckRequest = new TpsCheckRequest();
             tpsCheckRequest.setPointName(POINT_CONFIG_PUSH_SUCCESS);
             tpsControlManager.check(tpsCheckRequest);
@@ -226,6 +231,7 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
         
         @Override
         public void onFail(Throwable e) {
+            // [notifyConfig] server 步骤15b: 推送失败，记录失败统计并进行重试
             TpsCheckRequest tpsCheckRequest = new TpsCheckRequest();
             tpsCheckRequest.setPointName(POINT_CONFIG_PUSH_FAIL);
             tpsControlManager.check(tpsCheckRequest);
@@ -236,19 +242,21 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
         }
     }
     
+    // [notifyConfig] server 步骤16: 处理推送任务重试逻辑，支持延迟重试和连接管理
     private static void push(RpcPushTask retryTask, ConnectionManager connectionManager) {
         ConfigChangeNotifyRequest notifyRequest = retryTask.getNotifyRequest();
         if (retryTask.isOverTimes()) {
+            // [notifyConfig] server 步骤16a: 重试次数超限，注销客户端连接
             Loggers.REMOTE_PUSH.warn(
                     "push callback retry fail over times. dataId={},group={},tenant={},clientId={}, will unregister client.",
                     notifyRequest.getDataId(), notifyRequest.getGroup(), notifyRequest.getTenant(),
                     retryTask.getConnectionId());
             connectionManager.unregister(retryTask.getConnectionId());
         } else if (connectionManager.getConnection(retryTask.getConnectionId()) != null) {
-            // first time:delay 0s; second time:delay 2s; third time:delay 4s
+            // [notifyConfig] server 步骤16b: 客户端连接存在，延迟重试推送（首次延迟0s，第二次2s，第三次4s）
             ConfigExecutor.scheduleClientConfigNotifier(retryTask, retryTask.getTryTimes() * 2, TimeUnit.SECONDS);
         } else {
-            // client is already offline, ignore task.
+            // [notifyConfig] server 步骤16c: 客户端已离线，忽略推送任务
         }
     }
     
