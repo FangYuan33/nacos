@@ -50,7 +50,6 @@ public class DumpConfigHandler extends Subscriber<ConfigDumpEvent> {
     
         //gray
         if (StringUtils.isNotBlank(event.getGrayName())) {
-            //
             boolean result = false;
             if (!event.isRemove()) {
                 result = ConfigCacheService.dumpGray(dataId, group, namespaceId, event.getGrayName(),
