@@ -442,10 +442,7 @@ public class CacheData {
         }
         return stringBuilder.toString();
     }
-    
-    /**
-     * [notifyConfig] 步骤7: 安全地通知监听器配置变更，最终调用用户监听器的 receiveConfigInfo 方法
-     */
+
     @SuppressWarnings("PMD.MethodTooLongRule")
     private void safeNotifyListener(final String dataId, final String group, final String content, final String type,
             final String md5, final String encryptedDataKey, final ManagerListenerWrap listenerWrap) {
@@ -492,7 +489,6 @@ public class CacheData {
                             new LongNotifyHandler(listener.getClass().getSimpleName(), dataId, group, tenant, md5,
                                     notifyWarnTimeout, Thread.currentThread()), notifyWarnTimeout,
                             TimeUnit.MILLISECONDS);
-                    // [notifyConfig] 步骤8: 标记正在通知并触发监听器的回调方法 receiveConfigInfo，最终调用用户实现的监听器
                     listenerWrap.inNotifying = true;
                     listener.receiveConfigInfo(contentTmp);
                     // compare lastContent and content
