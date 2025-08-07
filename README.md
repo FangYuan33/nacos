@@ -19,4 +19,5 @@
 
 - `[notifyConfig]`: 通知配置变更
 - `[clientConnection]`: 客户端连接
+- `[registerInstance]`: 注册实例
 

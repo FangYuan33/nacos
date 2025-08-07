@@ -111,6 +111,7 @@ public class GrpcRequestAcceptor extends RequestGrpc.RequestImplBase {
             return;
         }
         
+        // [registerInstance] 步骤4：服务端根据请求类型从注册表中获取对应的请求处理器
         RequestHandler requestHandler = requestHandlerRegistry.getByRequestType(type);
         //no handler found.
         if (requestHandler == null) {
@@ -143,6 +144,7 @@ public class GrpcRequestAcceptor extends RequestGrpc.RequestImplBase {
         
         Object parseObj = null;
         try {
+            // [registerInstance] 步骤5：解析gRPC请求数据包，将其转换为Java对象
             parseObj = GrpcUtils.parse(grpcRequest);
         } catch (Exception e) {
             Loggers.REMOTE_DIGEST
@@ -195,6 +197,7 @@ public class GrpcRequestAcceptor extends RequestGrpc.RequestImplBase {
             requestMeta.setAbilityTable(connection.getAbilityTable());
             connectionManager.refreshActiveTime(requestMeta.getConnectionId());
             prepareRequestContext(request, requestMeta, connection);
+            // [registerInstance] 步骤6：调用具体的请求处理器处理注册实例请求
             Response response = requestHandler.handleRequest(request, requestMeta);
             Payload payloadResponse = GrpcUtils.convert(response);
             traceIfNecessary(payloadResponse, false);

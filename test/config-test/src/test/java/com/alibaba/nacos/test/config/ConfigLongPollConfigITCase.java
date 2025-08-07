@@ -165,7 +165,7 @@ class ConfigLongPollConfigITCase {
         System.out.println("=== 第二阶段：创建 NacosNamingService ===");
         Properties properties = new Properties();
         properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8848");
-        properties.put(PropertyKeyConst.NAMESPACE, "test-namespace");
+        properties.put(PropertyKeyConst.NAMESPACE, "7430d8fe-99ce-4b20-866e-ed021a0652c9");
         
         NamingService namingService = NacosFactory.createNamingService(properties);
         WeakReference<NamingService> namingServiceRef = new WeakReference<>(namingService);
@@ -186,7 +186,7 @@ class ConfigLongPollConfigITCase {
 
             analyzer.takeSnapshot("注册服务和监听器后");
             namingThreadPoolAnalyzer.takeThreadPoolSnapshot("注册服务和监听器后", namingService);
-            TimeUnit.SECONDS.sleep(3);
+            TimeUnit.HOURS.sleep(3);
         } catch (Exception e) {
             System.out.println("服务注册失败(预期，因为服务器可能未启动): " + e.getMessage());
         }

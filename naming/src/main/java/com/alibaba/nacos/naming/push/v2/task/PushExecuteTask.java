@@ -56,8 +56,10 @@ public class PushExecuteTask extends AbstractExecuteTask {
     @Override
     public void run() {
         try {
+            // [registerInstance] 步骤23：生成推送数据，包含服务实例信息和元数据
             PushDataWrapper wrapper = generatePushData();
             ClientManager clientManager = delayTaskEngine.getClientManager();
+            // [registerInstance] 步骤24：遍历目标客户端，向每个订阅了该服务的客户端推送数据
             for (String each : getTargetClientIds()) {
                 Client client = clientManager.getClient(each);
                 if (null == client) {
@@ -69,6 +71,7 @@ public class PushExecuteTask extends AbstractExecuteTask {
                 if (subscriber == null) {
                     continue;
                 }
+                // [registerInstance] 步骤25：通过推送执行器向客户端推送服务变更通知，完成整个注册流程
                 delayTaskEngine.getPushExecutor().doPushWithCallback(each, subscriber, wrapper,
                         new ServicePushCallback(each, subscriber, wrapper.getOriginalData(), delayTask.isPushToAll()));
             }

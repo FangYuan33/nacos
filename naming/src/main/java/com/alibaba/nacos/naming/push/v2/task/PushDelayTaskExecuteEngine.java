@@ -101,6 +101,7 @@ public class PushDelayTaskExecuteEngine extends NacosDelayTaskExecuteEngine {
         public boolean process(NacosTask task) {
             PushDelayTask pushDelayTask = (PushDelayTask) task;
             Service service = pushDelayTask.getService();
+            // [registerInstance] 步骤22：分发推送任务到执行器，准备将服务变更推送给客户端
             NamingExecuteTaskDispatcher.getInstance()
                     .dispatchAndExecuteTask(service, new PushExecuteTask(service, executeEngine, pushDelayTask));
             return true;

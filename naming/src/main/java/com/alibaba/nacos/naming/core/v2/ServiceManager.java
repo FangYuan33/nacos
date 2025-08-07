@@ -54,6 +54,10 @@ public class ServiceManager {
     
     /**
      * Get singleton service. Put to manager if no singleton.
+     * [registerInstance] 步骤12详细说明：此方法是控制台getServiceList数据的关键写入点
+     * 1. 首先在singletonRepository中查找或创建服务单例
+     * 2. 然后将服务添加到namespaceSingletonMaps中，这是按命名空间组织的服务集合
+     * 3. namespaceSingletonMaps是控制台展示服务列表的数据源
      *
      * @param service new service
      * @return if service is exist, return exist service, otherwise return new service
@@ -63,6 +67,8 @@ public class ServiceManager {
             NotifyCenter.publishEvent(new MetadataEvent.ServiceMetadataEvent(service, false));
             return service;
         });
+        // [registerInstance] 关键数据写入：将服务添加到命名空间服务映射表中
+        // 这是控制台getServiceList()方法通过getSingletons(namespace)获取数据的源头
         namespaceSingletonMaps.computeIfAbsent(result.getNamespace(), namespace -> new ConcurrentHashSet<>()).add(result);
         return result;
     }
