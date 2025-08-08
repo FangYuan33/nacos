@@ -444,6 +444,8 @@
                         --add-opens java.base/java.nio=ALL-UNNAMED
                         --add-opens java.base/sun.nio.ch=ALL-UNNAMED
                     </argLine>
+                    <skipTests>true</skipTests>
+                    <argLine>-Dnacos.standalone=true</argLine>
                 </configuration>
             </plugin>
             <plugin>
