@@ -548,7 +548,7 @@ public class ClientWorker implements Closeable {
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(initWorkerThreadCount(properties),
                 new NameThreadFactory("com.alibaba.nacos.client.Worker"));
         agent.setExecutor(executorService);
-        // 启动RPC客户端，在这里启动长轮询
+        // [clientConnection] 步骤2 启动 RPC 客户端
         agent.start();
         // 启动模糊配置监听器
         configFuzzyWatchGroupKeyHolder.start();
@@ -865,7 +865,7 @@ public class ClientWorker implements Closeable {
                         if (executor.isShutdown() || executor.isTerminated()) {
                             continue;
                         }
-                        // 执行配置监听检查 - 这是长轮询的核心逻辑
+                        // [clientConnection] 步骤3 执行配置监听检查 - 这是长轮询的核心逻辑
                         executeConfigListen();
                     } catch (Throwable e) {
                         LOGGER.error("[rpc listen execute] [rpc listen] exception", e);
@@ -1112,7 +1112,7 @@ public class ClientWorker implements Closeable {
                 List<Future> listenFutures = new ArrayList<>();
                 for (Map.Entry<String, List<CacheData>> entry : listenCachesMap.entrySet()) {
                     String taskId = entry.getKey();
-                    // 为每个 taskId 都创建一个 RpcClient 客户端
+                    // [clientConnection] 步骤4 为每个 taskId 都创建一个 RpcClient 客户端
                     RpcClient rpcClient = ensureRpcClient(taskId);
                     // 每个 taskId 专门分配一个线程数为 1 的线程池
                     ExecutorService executorService = ensureSyncExecutor(taskId);
@@ -1219,6 +1219,7 @@ public class ClientWorker implements Closeable {
                     // 初始化 RPC Client 处理器，包括配置变更和模糊通知处理器等
                     initRpcClientHandler(rpcClient);
                     rpcClient.setTenant(getTenant());
+                    // [clientConnection] 步骤5：初始化 RPC Client 处理器
                     rpcClient.start();
                 }
                 

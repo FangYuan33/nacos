@@ -200,10 +200,11 @@ public abstract class GrpcClient extends RpcClient {
     private ManagedChannel createNewManagedChannel(String serverIp, int serverPort) {
         LOGGER.info("grpc client connection server: {} ip, serverPort: {}, grpcTslConfig: {}", serverIp, serverPort,
                 JacksonUtils.toJson(clientConfig.tlsConfig()));
-        ManagedChannelBuilder<?> managedChannelBuilder = buildChannel(serverIp, serverPort, buildSslContext()).executor(
-                        grpcExecutor).compressorRegistry(CompressorRegistry.getDefaultInstance())
+        ManagedChannelBuilder<?> managedChannelBuilder = buildChannel(serverIp, serverPort, buildSslContext())
+                .executor(grpcExecutor).compressorRegistry(CompressorRegistry.getDefaultInstance())
                 .decompressorRegistry(DecompressorRegistry.getDefaultInstance())
                 .maxInboundMessageSize(clientConfig.maxInboundMessageSize())
+                // channel 链接超时配置
                 .keepAliveTime(clientConfig.channelKeepAlive(), TimeUnit.MILLISECONDS)
                 .keepAliveTimeout(clientConfig.channelKeepAliveTimeout(), TimeUnit.MILLISECONDS);
         return managedChannelBuilder.build();
@@ -231,6 +232,7 @@ public abstract class GrpcClient extends RpcClient {
             ServerCheckRequest serverCheckRequest = new ServerCheckRequest();
             Payload grpcRequest = GrpcUtils.convert(serverCheckRequest);
             ListenableFuture<Payload> responseFuture = requestBlockingStub.request(grpcRequest);
+            // 阻塞等待服务端返回
             Payload response = responseFuture.get(clientConfig.serverCheckTimeOut(), TimeUnit.MILLISECONDS);
             // receive connection unregister response here,not check response is success.
             return (Response) GrpcUtils.parse(response);
@@ -259,7 +261,7 @@ public abstract class GrpcClient extends RpcClient {
                     if (request != null) {
                         try {
                             if (request instanceof SetupAckRequest) {
-                                // [clientConnection] 步骤30：客户端接收服务端的SetupAck响应，确认连接建立成功
+                                // [clientConnection] 步骤36：客户端接收服务端的SetupAck响应，确认连接建立成功
                                 // there is no connection ready this time
                                 setupRequestHandler.requestReply(request, null);
                                 return;
@@ -337,19 +339,19 @@ public abstract class GrpcClient extends RpcClient {
         // the newest connection id
         String connectionId = "";
         try {
-            // [clientConnection] 步骤1：创建 gRPC 执行器线程池，用于处理客户端异步任务和回调
+            // [clientConnection] 步骤7：创建 gRPC 执行器线程池，用于处理客户端异步任务和回调
             if (grpcExecutor == null) {
                 this.grpcExecutor = createGrpcExecutor(serverInfo.getServerIp());
             }
-            // [clientConnection] 步骤2：计算服务端 gRPC 端口
+            // [clientConnection] 步骤8：计算服务端 gRPC 端口
             // 通常是 HTTP 端口 + 1000，如 8848 -> 9848
             int port = serverInfo.getServerPort() + rpcPortOffset();
-            // [clientConnection] 步骤3：创建 gRPC 管理通道，建立与服务端的底层网络连接
+            // [clientConnection] 步骤9：创建 gRPC 管理通道 channel，建立与服务端的底层网络连接
             ManagedChannel managedChannel = createNewManagedChannel(serverInfo.getServerIp(), port);
-            // [clientConnection] 步骤4：创建 gRPC 存根（Stub），用于发送请求
+            // [clientConnection] 步骤10：创建 gRPC 存根（Stub），用于发送请求
             RequestGrpc.RequestFutureStub newChannelStubTemp = createNewChannelStub(managedChannel);
             
-            // [clientConnection] 步骤5：发送服务器健康检查请求，验证服务端可用性
+            // [clientConnection] 步骤11：发送服务器健康检查请求，验证服务端可用性
             Response response = serverCheck(serverInfo.getServerIp(), port, newChannelStubTemp);
             if (!(response instanceof ServerCheckResponse)) {
                 shuntDownChannel(managedChannel);
@@ -357,18 +359,18 @@ public abstract class GrpcClient extends RpcClient {
             }
             // submit ability table as soon as possible
             // ability table will be null if server doesn't support ability table
-            // [clientConnection] 步骤6：获取连接ID和服务器能力信息
+            // [clientConnection] 步骤12：获取连接ID和服务器能力信息
             ServerCheckResponse serverCheckResponse = (ServerCheckResponse) response;
             connectionId = serverCheckResponse.getConnectionId();
             
-            // [clientConnection] 步骤7：创建双向流存根，用于建立双向通信流
+            // [clientConnection] 步骤13：创建双向流存根，用于建立双向通信流
             BiRequestStreamGrpc.BiRequestStreamStub biRequestStreamStub = BiRequestStreamGrpc.newStub(
                     newChannelStubTemp.getChannel());
-            // [clientConnection] 步骤8：创建 gRPC 连接对象，封装连接信息
+            // [clientConnection] 步骤14：创建 gRPC 连接对象，封装连接信息
             GrpcConnection grpcConn = new GrpcConnection(serverInfo, grpcExecutor);
             grpcConn.setConnectionId(connectionId);
             // if not supported, it will be false
-            // [clientConnection] 步骤9：处理能力协商，协商客户端和服务端功能支持
+            // [clientConnection] 步骤15：处理能力协商，协商客户端和服务端功能支持
             if (serverCheckResponse.isSupportAbilityNegotiation()) {
                 // mark
                 this.recAbilityContext.reset(grpcConn);
@@ -377,17 +379,17 @@ public abstract class GrpcClient extends RpcClient {
             }
             
             //create stream request and bind connection event to this connection.
-            // [clientConnection] 步骤10：绑定双向流，建立客户端和服务端的双向通信通道
+            // [clientConnection] 步骤16：绑定双向流，建立客户端和服务端的双向通信通道
             StreamObserver<Payload> payloadStreamObserver = bindRequestStream(biRequestStreamStub, grpcConn);
             
             // stream observer to send response to server
-            // [clientConnection] 步骤11：设置连接属性，配置流观察器和存根
+            // [clientConnection] 步骤17：设置连接属性，配置流观察器和存根
             grpcConn.setPayloadStreamObserver(payloadStreamObserver);
             grpcConn.setGrpcFutureServiceStub(newChannelStubTemp);
             grpcConn.setChannel(managedChannel);
 
             //send a  setup request.
-            // [clientConnection] 步骤12：发送连接建立请求到服务端，包含客户端版本和能力信息
+            // [clientConnection] 步骤18：发送连接建立请求到服务端，包含客户端版本和能力信息
             ConnectionSetupRequest conSetupRequest = new ConnectionSetupRequest();
             conSetupRequest.setClientVersion(getClientVersion());
             conSetupRequest.setLabels(super.getLabels());
@@ -398,7 +400,7 @@ public abstract class GrpcClient extends RpcClient {
             // 发送建立连接请求
             grpcConn.sendRequest(conSetupRequest);
             // wait for response
-            // [clientConnection] 步骤13：等待服务端确认连接建立，完成能力协商
+            // [clientConnection] 步骤19：等待服务端确认连接建立，完成能力协商
             if (recAbilityContext.isNeedToSync()) {
                 // try to wait for notify response
                 recAbilityContext.await(this.clientConfig.capabilityNegotiationTimeout(), TimeUnit.MILLISECONDS);
@@ -601,11 +603,11 @@ public abstract class GrpcClient extends RpcClient {
             // if finish setup
             if (request instanceof SetupAckRequest) {
                 SetupAckRequest setupAckRequest = (SetupAckRequest) request;
-                // [clientConnection] 步骤31：客户端完成能力协商，获取服务端能力信息
+                // [clientConnection] 步骤37：客户端完成能力协商，获取服务端能力信息
                 // remove and count down
                 recAbilityContext.release(
                         Optional.ofNullable(setupAckRequest.getAbilityTable()).orElse(new HashMap<>(0)));
-                // [clientConnection] 步骤32：连接建立完成，返回SetupAck响应，客户端与服务端双向gRPC连接正式建立
+                // [clientConnection] 步骤38：连接建立完成，返回SetupAck响应，客户端与服务端双向gRPC连接正式建立
                 return new SetupAckResponse();
             }
             return null;

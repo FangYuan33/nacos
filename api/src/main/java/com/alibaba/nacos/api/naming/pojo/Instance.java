@@ -75,7 +75,7 @@ public class Instance implements NacosForm {
     
     /**
      * If instance is ephemeral.
-     *
+     * 暂时的；临时的
      * @since 1.0.0
      */
     private boolean ephemeral = true;

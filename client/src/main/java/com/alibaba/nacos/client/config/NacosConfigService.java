@@ -90,6 +90,7 @@ public class NacosConfigService implements ConfigService {
         
         // 创建客户端工作器 - 长轮询机制的核心组件
         // 负责与服务端建立长轮询连接，监听配置变更
+        // [clientConnection] 步骤1 启动客户端
         this.worker = new ClientWorker(this.configFilterChainManager, serverListManager, clientProperties);
     }
     
