@@ -76,3 +76,56 @@ service BiRequestStream {
 
 
 
+---
+Raft 算法学习指南
+
+Raft 是一种设计用于解决分布式系统中一致性问题的共识算法，它被设计为比 Paxos 更易于理解和实现。从你分享的代码可以看到，Nacos 使用了基于 JRaft 的实现来保证集群配置的一致性。
+
+Raft 算法核心概念
+Raft 将分布式一致性问题分解为三个相对独立的子问题：
+
+领导人选举：当现有领导人失效时，选举新的领导人
+日志复制：领导人接收客户端请求并将其作为日志条目复制到集群中所有节点
+安全性：确保所有节点以相同的顺序应用相同的命令
+学习 Raft 的方法
+1. 理论基础学习
+   阅读原论文：《In Search of an Understandable Consensus Algorithm》(寻找一种可理解的共识算法)
+
+中文翻译版本也有，可以在网上搜索到
+视频教程：
+
+MIT 6.824 分布式系统课程中的 Raft 部分
+
+2. 可视化工具
+   The Secret Lives of Data http://thesecretlivesofdata.com/raft/ ：交互式可视化演示
+   Raft Visualization https://raft.github.io/ ：官方推荐的可视化工具
+3. 代码学习
+   JRaft：阿里巴巴开源的 Java 版 Raft 实现（你分享的 Nacos 中使用的就是这个）
+
+源码：https://github.com/sofastack/sofa-jraft
+etcd/raft：Go 语言实现的 Raft，在 etcd 中使用
+
+源码：https://github.com/etcd-io/etcd/tree/main/raft
+4. 动手实践
+   构建简单实现：尝试自己实现一个简化版的 Raft
+   基于 JRaft 开发：可以尝试在你自己的项目中集成 JRaft
+   分析 Nacos 源码：深入理解 Nacos 如何使用 JRaft 实现配置一致性
+5. 进阶主题
+   成员变更：学习如何安全地改变集群配置
+   日志压缩：了解 Raft 中快照机制如何工作
+   性能优化：研究提高 Raft 性能的各种技术
+   学习资源推荐
+   官方资源：
+
+Raft 官网：https://raft.github.io/
+Raft 论文：https://raft.github.io/raft.pdf
+书籍：
+
+《分布式一致性算法开发实战》
+《数据密集型应用系统设计》(设计数据密集型应用) 第9章
+博客和教程：
+
+Raft 算法详解 https://zhuanlan.zhihu.com/p/32052223
+JRaft 实现原理 https://www.sofastack.tech/projects/sofa-jraft/overview/
+
+Raft 算法是分布式系统领域的重要知识点，通过理论结合实践的方式学习，你会对分布式一致性有更深入的理解，也能更好地应用到实际工作中。
