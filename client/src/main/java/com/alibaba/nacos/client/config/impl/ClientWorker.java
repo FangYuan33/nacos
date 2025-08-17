@@ -781,8 +781,7 @@ public class ClientWorker implements Closeable {
                 return null;
             });
             // 注册模糊监听处理器
-            rpcClientInner.registerServerRequestHandler(
-                    new ClientFuzzyWatchNotifyRequestHandler(configFuzzyWatchGroupKeyHolder));
+            rpcClientInner.registerServerRequestHandler(new ClientFuzzyWatchNotifyRequestHandler(configFuzzyWatchGroupKeyHolder));
 
             // 注册链接事件监听器
             rpcClientInner.registerConnectionListener(new ConnectionEventListener() {
@@ -938,6 +937,7 @@ public class ClientWorker implements Closeable {
             }
             
             // 执行监听检查，返回是否有变更
+            // [clientConnection] 步骤3.1 校验监听缓存
             // [notifyConfig] client 步骤20a: 从服务端查询最新配置内容并触发监听器回调
             boolean hasChangedKeys = checkListenCache(listenCachesMap);
             
@@ -1216,10 +1216,11 @@ public class ClientWorker implements Closeable {
                 RpcClient rpcClient = RpcClientFactory.createClient(uuid + "_config-" + taskId, getConnectionType(),
                         grpcClientConfig);
                 if (rpcClient.isWaitInitiated()) {
+                    // [clientConnection] 步骤5：初始化 RPC Client 处理器
                     // 初始化 RPC Client 处理器，包括配置变更和模糊通知处理器等
                     initRpcClientHandler(rpcClient);
                     rpcClient.setTenant(getTenant());
-                    // [clientConnection] 步骤5：初始化 RPC Client 处理器
+                    // 启动
                     rpcClient.start();
                 }
                 

@@ -105,27 +105,26 @@ public class ConnectionManager {
      * @param connection   connection
      */
     public synchronized boolean register(String connectionId, Connection connection) {
-        
         if (connection.isConnected()) {
             String clientIp = connection.getMetaInfo().clientIp;
-            // [clientConnection] 步骤30：检查连接ID是否已存在，避免重复注册
+            // 检查连接ID是否已存在，避免重复注册
             if (connections.containsKey(connectionId)) {
                 return true;
             }
-            // [clientConnection] 步骤31：检查连接数量限制，防止过载
+            // 检查连接数量限制，防止过载
             if (checkLimit(connection)) {
                 return false;
             }
-            // [clientConnection] 步骤32：设置连接跟踪状态，用于调试和监控
+            // 设置连接跟踪状态，用于调试和监控
             if (traced(clientIp)) {
                 connection.setTraced(true);
             }
-            // [clientConnection] 步骤33：将连接保存到ConnectionManager的连接映射表中
+            // 将连接保存到ConnectionManager的连接映射表中
             connections.put(connectionId, connection);
-            // [clientConnection] 步骤34：更新客户端IP的连接计数器
+            // 更新客户端IP的连接计数器
             connectionForClientIp.computeIfAbsent(clientIp, k -> new AtomicInteger(0)).getAndIncrement();
             
-            // [clientConnection] 步骤35：通知连接事件监听器，客户端连接成功建立
+            // 通知连接事件监听器，客户端连接成功建立
             clientConnectionEventListenerRegistry.notifyClientConnected(connection);
             
             LOGGER.info("new connection registered successfully, connectionId = {},connection={} ", connectionId,

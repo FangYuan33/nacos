@@ -177,9 +177,10 @@ public class GrpcBiStreamRequestAcceptor extends BiRequestStreamGrpc.BiRequestSt
                 connection.setAbilityTable(setUpRequest.getAbilityTable());
             }
             boolean rejectSdkOnStarting = metaInfo.isSdkSource() && !ApplicationUtils.isStarted();
+            // [clientConnection] 步骤27：register 注册连接
             if (rejectSdkOnStarting || !connectionManager.register(connectionId, connection)) {
                 //Not register to the connection manager if current server is over limit or server is starting.
-                // [clientConnection] 步骤27：连接注册失败，拒绝连接并清理资源
+                // [clientConnection] 步骤28：连接注册失败，拒绝连接并清理资源
                 try {
                     Loggers.REMOTE_DIGEST.warn("[{}]Connection register fail,reason:{}", connectionId,
                             rejectSdkOnStarting ? " server is not started" : " server is over limited.");

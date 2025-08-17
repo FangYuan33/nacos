@@ -261,7 +261,7 @@ public abstract class GrpcClient extends RpcClient {
                     if (request != null) {
                         try {
                             if (request instanceof SetupAckRequest) {
-                                // [clientConnection] 步骤36：客户端接收服务端的SetupAck响应，确认连接建立成功
+                                // [clientConnection] 步骤30：客户端接收服务端的SetupAck响应，确认连接建立成功
                                 // there is no connection ready this time
                                 setupRequestHandler.requestReply(request, null);
                                 return;
@@ -365,7 +365,8 @@ public abstract class GrpcClient extends RpcClient {
             
             // [clientConnection] 步骤13：创建双向流存根，用于建立双向通信流
             BiRequestStreamGrpc.BiRequestStreamStub biRequestStreamStub = BiRequestStreamGrpc.newStub(
-                    newChannelStubTemp.getChannel());
+                    newChannelStubTemp.getChannel()
+            );
             // [clientConnection] 步骤14：创建 gRPC 连接对象，封装连接信息
             GrpcConnection grpcConn = new GrpcConnection(serverInfo, grpcExecutor);
             grpcConn.setConnectionId(connectionId);
@@ -394,8 +395,7 @@ public abstract class GrpcClient extends RpcClient {
             conSetupRequest.setClientVersion(getClientVersion());
             conSetupRequest.setLabels(super.getLabels());
             // set ability table
-            conSetupRequest.setAbilityTable(
-                    NacosAbilityManagerHolder.getInstance().getCurrentNodeAbilities(abilityMode()));
+            conSetupRequest.setAbilityTable(NacosAbilityManagerHolder.getInstance().getCurrentNodeAbilities(abilityMode()));
             conSetupRequest.setTenant(super.getTenant());
             // 发送建立连接请求
             grpcConn.sendRequest(conSetupRequest);
@@ -405,6 +405,7 @@ public abstract class GrpcClient extends RpcClient {
                 // try to wait for notify response
                 recAbilityContext.await(this.clientConfig.capabilityNegotiationTimeout(), TimeUnit.MILLISECONDS);
                 // if no server abilities receiving, then reconnect
+                // 如果没有收到能力协商的结果证明没有连接成功，需要重新连接
                 if (!recAbilityContext.check(grpcConn)) {
                     return null;
                 }
@@ -603,11 +604,9 @@ public abstract class GrpcClient extends RpcClient {
             // if finish setup
             if (request instanceof SetupAckRequest) {
                 SetupAckRequest setupAckRequest = (SetupAckRequest) request;
-                // [clientConnection] 步骤37：客户端完成能力协商，获取服务端能力信息
-                // remove and count down
-                recAbilityContext.release(
-                        Optional.ofNullable(setupAckRequest.getAbilityTable()).orElse(new HashMap<>(0)));
-                // [clientConnection] 步骤38：连接建立完成，返回SetupAck响应，客户端与服务端双向gRPC连接正式建立
+                // [clientConnection] 步骤31：客户端完成能力协商，获取服务端能力信息，注意其中有 CountDownLatch 的释放，对应步骤 19 的等待
+                recAbilityContext.release(Optional.ofNullable(setupAckRequest.getAbilityTable()).orElse(new HashMap<>(0)));
+                // [clientConnection] 步骤32：连接建立完成，返回SetupAck响应，客户端与服务端双向gRPC连接正式建立
                 return new SetupAckResponse();
             }
             return null;
