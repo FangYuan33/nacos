@@ -167,6 +167,7 @@ public class ConfigInnerHandler implements ConfigHandler {
             configForm.setContent(pair.getSecond());
             encryptedDataKeyFinal = pair.getFirst();
         }
+        // [notifyConfig] server 步骤2: ConfigInnerHandler 处理配置的发布
         return configOperationService.publishConfig(configForm, configRequestInfo, encryptedDataKeyFinal);
     }
     

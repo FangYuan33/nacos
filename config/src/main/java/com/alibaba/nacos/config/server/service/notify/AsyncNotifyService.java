@@ -92,6 +92,7 @@ public class AsyncNotifyService {
             
             @Override
             public void onEvent(Event event) {
+                // [notifyConfig] server 步骤4: 监听并处理 ConfigDataChangeEvent 事件
                 // Generate ConfigDataChangeEvent concurrently
                 handleConfigDataChangeEvent(event);
             }
@@ -115,7 +116,7 @@ public class AsyncNotifyService {
             Queue<NotifySingleRpcTask> rpcQueue = new LinkedList<>();
             
             for (Member member : ipList) {
-                // grpc report data change only 通知其他节点数据变更
+                // grpc report data change only 生成通知其他节点数据变更的任务
                 NotifySingleRpcTask notifySingleRpcTask = generateTask(evt, member);
                 if (notifySingleRpcTask != null) {
                     rpcQueue.add(notifySingleRpcTask);
@@ -209,6 +210,7 @@ public class AsyncNotifyService {
         
         @Override
         public void run() {
+            // [notifyConfig] server 步骤5：处理通知其他节点配置变更的任务
             executeAsyncRpcTask(queue);
         }
     }

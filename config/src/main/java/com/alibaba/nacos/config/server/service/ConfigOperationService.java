@@ -153,7 +153,7 @@ public class ConfigOperationService {
                 }
             }
         }
-        // [notifyConfig] server 步骤3: 发布 ConfigDataChangeEvent 配置变更事件，这是触发客户端通知的关键步骤
+        // [notifyConfig] server 步骤3: 发布 ConfigDataChangeEvent 配置变更事件
         // AsyncNotifyService 消费事件通知集群其他节点；DumpService 消费事件创建转存任务
         ConfigChangePublisher.notifyConfigChange(
                 new ConfigDataChangeEvent(configForm.getDataId(), configForm.getGroup(), configForm.getNamespaceId(),

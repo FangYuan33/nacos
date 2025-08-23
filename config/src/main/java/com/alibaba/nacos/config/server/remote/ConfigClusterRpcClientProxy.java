@@ -48,6 +48,7 @@ public class ConfigClusterRpcClientProxy {
      */
     public void syncConfigChange(Member member, ConfigChangeClusterSyncRequest request, RequestCallBack callBack)
             throws NacosException {
+        // [notifyConfig] server 步骤6：向集群中其他节点发布配置变更通知
         clusterRpcClientProxy.asyncRequest(member, request, callBack);
     }
 }

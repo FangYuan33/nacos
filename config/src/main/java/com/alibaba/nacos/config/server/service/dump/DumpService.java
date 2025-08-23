@@ -292,7 +292,6 @@ public abstract class DumpService {
     
     /**
      * dump operation.
-     * [notifyConfig] server 步骤5: 处理 dump 转储请求
      * 根据是否是灰度配置，调用不同的转储方法
      * 
      * @param dumpRequest dumpRequest.
@@ -309,7 +308,6 @@ public abstract class DumpService {
     
     /**
      * dump formal config.
-     * [notifyConfig] server 步骤6: 正式配置转储
      * 创建 DumpTask 任务，交给 DumpProcessor 处理
      * 作用：将配置变更转换为异步任务
      *
@@ -322,6 +320,7 @@ public abstract class DumpService {
     private void dumpFormal(String dataId, String group, String tenant, long lastModified, String handleIp) {
         String groupKey = GroupKey2.getKey(dataId, group, tenant);
         String taskKey = groupKey;
+        // [notifyConfig] server 步骤5: 生成转储任务 DumpTask
         dumpTaskMgr.addTask(taskKey, new DumpTask(groupKey, null, lastModified, handleIp));
         DUMP_LOG.info("[dump] add formal task. groupKey={}", groupKey);
         
