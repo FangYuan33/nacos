@@ -38,6 +38,13 @@ ifconfig | grep "inet " | grep -v 127.0.0.1
 
 这样 Nacos Server 会和其他的 Server 创建 gRPC 连接，文件都创建好之后再次启动，集群就部署成功了。为了启动方便，可以在 IDEA 启动配置中添加一个 Compound，将三个启动配置都添加到这个配置中，这样就可以同时启动三个 Nacos Server 了。
 
+注意在 `resources/application.properties` 添加配置：
+
+```properties
+nacos.core.auth.server.identity.key=nacos_fy
+nacos.core.auth.server.identity.value=nacos_fy
+```
+
 ---
 
 ### module
