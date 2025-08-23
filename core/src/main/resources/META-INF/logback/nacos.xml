@@ -289,10 +289,6 @@
     <logger name="com.alibaba.nacos.core.protocol.distro" additivity="false" level="INFO">
         <appender-ref ref="protocol-distro"/>
     </logger>
-    
-    <logger name="com.alibaba.nacos.core.cluster" additivity="false" level="INFO">
-        <appender-ref ref="nacos-cluster"/>
-    </logger>
 
     <logger name="com.alibaba.nacos.config.monitorLog" additivity="false">
         <level value="DEBUG"/>
@@ -328,6 +324,22 @@
         <level value="DEBUG"/>
         <appender-ref ref="CONSOLE"/>
     </Logger>
+
+    <Logger name="com.alibaba.nacos.core.protocol.raft" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="CONSOLE"/>
+    </Logger>
+
+    <Logger name="com.alibaba.nacos.core.protocol.distro" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="CONSOLE"/>
+    </Logger>
+
+    <logger name="com.alibaba.nacos.core.cluster" additivity="false">
+<!--        <appender-ref ref="nacos-cluster"/>-->
+        <level value="DEBUG"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
 
     <springProfile name="standalone">
         
