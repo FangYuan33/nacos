@@ -36,14 +36,14 @@ ifconfig | grep "inet " | grep -v 127.0.0.1
 10.254.77.99:8852
 ```
 
-这样 Nacos Server 会和其他的 Server 创建 gRPC 连接，文件都创建好之后再次启动，集群就部署成功了。为了启动方便，可以在 IDEA 启动配置中添加一个 Compound，将三个启动配置都添加到这个配置中，这样就可以同时启动三个 Nacos Server 了。
-
-注意在 `resources/application.properties` 添加配置：
+并且需要在 `resources/application.properties` 添加配置：
 
 ```properties
 nacos.core.auth.server.identity.key=nacos_fy
 nacos.core.auth.server.identity.value=nacos_fy
 ```
+
+这样 Nacos Server 会和其他的 Server 创建 gRPC 连接，文件都创建好之后再次启动，集群就部署成功了。为了启动方便，可以在 IDEA 启动配置中添加一个 Compound，将三个启动配置都添加到这个配置中，这样就可以同时启动三个 Nacos Server 了。
 
 ---
 
@@ -59,60 +59,6 @@ nacos.core.auth.server.identity.value=nacos_fy
 - `[notifyConfig]`: 通知配置变更
 - `[clientConnection]`: 客户端连接
 - `[registerInstance]`: 注册实例
-
----
-
-### Nacos 对 gRPC 的使用
-
-接下来我们以 Nacos 源码为例，解析它在创建连接时是如何使用 gRPC 的。
-
-#### protobuf
-
-以下是 Nacos 中定义的 protobuf 文件：
-
-```protobuf
-syntax = "proto3";
-
-import "google/protobuf/any.proto";
-import "google/protobuf/timestamp.proto";
-
-option java_multiple_files = true;
-option java_package = "com.alibaba.nacos.api.grpc.auto";
-
-message Metadata {
-  string type = 3;
-  string clientIp = 8;
-  map<string, string> headers = 7;
-}
-
-message Payload {
-  Metadata metadata = 2;
-  google.protobuf.Any body = 3;
-}
-
-service Request {
-  // Sends a commonRequest
-  rpc request (Payload) returns (Payload) {
-  }
-}
-
-service BiRequestStream {
-  // Sends a biStreamRequest
-  rpc requestBiStream (stream Payload) returns (stream Payload) {
-  }
-}
-```
-
-首先我们先看一下 `Metadata` 的定义，它是传递请求 `Payload` 的元数据，其中的三个字段的字段号并不是连续的；`Payload` 载荷消息是实际的传输对象，它除了包含 `Metadata` 外，还定义了 `google.protobuf.Any body` 请求体字段，`Any` 类型表示它可以包装任意类型的消息体。
-
-接下来我们分析下它的服务（service）定义：
-
-- `Request` 服务定义了一个 `request` 方法，它接收一个 `Payload` 类型的参数，返回一个 `Payload` 类型的结果，适用于简单的“请求-响应”场景。
-- `BiRequestStream` 服务定义了 `requestBiStream` 方法，它接收一个 `Payload` 类型的流参数，返回一个 `Payload` 类型的流结果，是 **双向流式RPC服务**，客户端可以同时发送多个请求，服务端也可以同时发送多个响应，支持全双工通信。
-
-#### 服务端
-
-
 
 ---
 Raft 算法学习指南

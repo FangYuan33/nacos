@@ -78,7 +78,7 @@ class ConfigLongPollConfigITCase {
     @Test
     void test() throws InterruptedException, NacosException {
         Properties properties = new Properties();
-        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8848");
+        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8850");
         properties.put(PropertyKeyConst.CONFIG_LONG_POLL_TIMEOUT, "20000");
         properties.put(PropertyKeyConst.CONFIG_RETRY_TIME, "3000");
         properties.put(PropertyKeyConst.MAX_RETRY, "5");

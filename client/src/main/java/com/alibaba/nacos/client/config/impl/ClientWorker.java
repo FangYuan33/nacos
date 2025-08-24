@@ -728,14 +728,13 @@ public class ClientWorker implements Closeable {
             labels.putAll(appLabels);
             return labels;
         }
-        
-        // [notifyConfig] client 步骤17: 客户端接收服务端推送的配置变更通知请求
+
         ConfigChangeNotifyResponse handleConfigChangeNotifyRequest(ConfigChangeNotifyRequest configChangeNotifyRequest,
                 String clientName) {
             LOGGER.info("[{}] [server-push] config changed. dataId={}, group={},tenant={}", clientName,
                     configChangeNotifyRequest.getDataId(), configChangeNotifyRequest.getGroup(),
                     configChangeNotifyRequest.getTenant());
-            // [notifyConfig] client 步骤18: 构建配置唯一标识，查找对应的本地缓存数据
+            // 构建配置唯一标识，查找对应的本地缓存数据
             String groupKey = GroupKey.getKeyTenant(configChangeNotifyRequest.getDataId(),
                     configChangeNotifyRequest.getGroup(), configChangeNotifyRequest.getTenant());
             
@@ -743,11 +742,11 @@ public class ClientWorker implements Closeable {
             CacheData cacheData = cacheMap.get().get(groupKey);
             if (cacheData != null) {
                 synchronized (cacheData) {
-                    // [notifyConfig] client 步骤19: 标记配置状态变更，触发配置拉取和监听器通知
+                    // 标记配置状态变更，触发配置拉取和监听器通知
                     cacheData.getReceiveNotifyChanged().set(true);
                     // 标记与服务端不一致
                     cacheData.setConsistentWithServer(false);
-                    // 立即触发监听配置检查
+                    // 重要：立即触发监听配置检查
                     notifyListenConfig();
                 }
                 
@@ -768,6 +767,7 @@ public class ClientWorker implements Closeable {
             rpcClientInner.registerServerRequestHandler((request, connection) -> {
                 // config change notify
                 if (request instanceof ConfigChangeNotifyRequest) {
+                    // [notifyConfig] client 步骤2: 客户端处理服务端推送的配置变更通知请求
                     return handleConfigChangeNotifyRequest((ConfigChangeNotifyRequest) request,
                             rpcClientInner.getName());
                 }
@@ -938,7 +938,7 @@ public class ClientWorker implements Closeable {
             
             // 执行监听检查，返回是否有变更
             // [clientConnection] 步骤3.1 校验监听缓存
-            // [notifyConfig] client 步骤20a: 从服务端查询最新配置内容并触发监听器回调
+            // [notifyConfig] client 步骤3: 从服务端查询最新配置内容并触发监听器回调
             boolean hasChangedKeys = checkListenCache(listenCachesMap);
             
             // 执行移除 discard 的配置
@@ -1020,18 +1020,18 @@ public class ClientWorker implements Closeable {
             }
             return multiTaskExecutor.get(taskId);
         }
-        
+
+        // [notifyConfig] client 步骤4: 从服务端查询最新配置内容，修改 CacheData 本地缓存中记录的内容
         private void refreshContentAndCheck(RpcClient rpcClient, String groupKey, boolean notify) {
             if (cacheMap.get() != null && cacheMap.get().containsKey(groupKey)) {
                 CacheData cache = cacheMap.get().get(groupKey);
                 refreshContentAndCheck(rpcClient, cache, notify);
             }
         }
-        
-        // [notifyConfig] client 步骤20b: 从服务端查询最新配置内容并触发监听器回调
+
         private void refreshContentAndCheck(RpcClient rpcClient, CacheData cacheData, boolean notify) {
             try {
-                // [notifyConfig] client 步骤21: 向服务端查询最新的配置内容，并写入 CacheData 中
+                // 向服务端查询最新的配置内容，并写入 CacheData 中，并且记录在了本地文件中
                 ConfigResponse response = this.queryConfigInner(rpcClient, cacheData.dataId, cacheData.group,
                         cacheData.tenant, requestTimeout, notify);
                 cacheData.setEncryptedDataKey(response.getEncryptedDataKey());
@@ -1044,7 +1044,7 @@ public class ClientWorker implements Closeable {
                             cacheData.dataId, cacheData.group, cacheData.tenant, cacheData.getMd5(),
                             response.getConfigType());
                 }
-                // [notifyConfig] client 步骤22: 检查配置MD5变化并触发监听器回调通知应用程序
+                // 检查配置 MD5 变化并触发监听器回调通知应用程序
                 cacheData.checkListenerMd5();
             } catch (Exception e) {
                 LOGGER.error("refresh content and check md5 fail ,dataId={},group={},tenant={} ", cacheData.dataId,

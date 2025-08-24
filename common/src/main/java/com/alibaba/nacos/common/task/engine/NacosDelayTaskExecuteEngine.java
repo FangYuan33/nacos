@@ -55,6 +55,7 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
         super(logger);
         tasks = new ConcurrentHashMap<>(initCapacity);
         processingExecutor = ExecutorFactory.newSingleScheduledExecutorService(new NameThreadFactory(name));
+        // [notifyConfig] server 步骤7: 处理配置转储 DumpTask 任务，100ms 执行一次的定时任务
         processingExecutor
                 .scheduleWithFixedDelay(new ProcessRunnable(), processInterval, processInterval, TimeUnit.MILLISECONDS);
     }
@@ -129,7 +130,6 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
     
     /**
      * process tasks in execute engine. 消费任务 Task
-     * [notifyConfig] server 步骤7a: 处理配置转储任务
      */
     protected void processTasks() {
         Collection<Object> keys = getAllTaskKeys();

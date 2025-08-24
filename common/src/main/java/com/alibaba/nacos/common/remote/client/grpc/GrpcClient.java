@@ -266,9 +266,11 @@ public abstract class GrpcClient extends RpcClient {
                                 setupRequestHandler.requestReply(request, null);
                                 return;
                             }
+                            // [notifyConfig] client 步骤1: 客户端接收服务端推送的配置变更通知请求
                             Response response = handleServerRequest(request);
                             if (response != null) {
                                 response.setRequestId(request.getRequestId());
+                                // 处理完成之后给服务端发送回执 ACK
                                 sendResponse(response);
                             } else {
                                 LOGGER.warn("[{}]Fail to process server request, ackId->{}", grpcConn.getConnectionId(),

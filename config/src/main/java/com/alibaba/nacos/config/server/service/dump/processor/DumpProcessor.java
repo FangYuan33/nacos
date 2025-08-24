@@ -50,7 +50,7 @@ public class DumpProcessor implements NacosTaskProcessor {
     }
     
     /**
-     * [notifyConfig] server 步骤7b: 处理配置转储任务
+     * [notifyConfig] server 步骤8: 处理配置转储任务
      * 从数据库读取配置信息，构建 ConfigDumpEvent 事件
      * 作用：将数据库中的配置信息转换为配置转储事件
      */
