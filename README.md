@@ -113,3 +113,11 @@ Raft 算法详解 https://zhuanlan.zhihu.com/p/32052223
 JRaft 实现原理 https://www.sofastack.tech/projects/sofa-jraft/overview/
 
 Raft 算法是分布式系统领域的重要知识点，通过理论结合实践的方式学习，你会对分布式一致性有更深入的理解，也能更好地应用到实际工作中。
+
+---
+
+```sql
+-- 查询 derby 数据库中所有的表
+SELECT t.TABLENAME FROM SYS.SYSTABLES t, SYS.SYSSCHEMAS s WHERE s.SCHEMAID = t.SCHEMAID
+```
+

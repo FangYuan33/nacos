@@ -439,6 +439,7 @@ public class DistributedDatabaseOperateImpl extends RequestProcessor4CP implemen
                     .putAllExtendInfo(EmbeddedStorageContextHolder.getCurrentExtendInfo())
                     .setType(sqlContext.getClass().getCanonicalName()).build();
             if (Objects.isNull(consumer)) {
+                // [cluster_derby_notifyConfig] 步骤3: raft 协议开始执行
                 Response response = this.protocol.write(request);
                 if (response.getSuccess()) {
                     return true;

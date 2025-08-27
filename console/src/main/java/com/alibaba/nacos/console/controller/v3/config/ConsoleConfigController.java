@@ -105,6 +105,7 @@ public class ConsoleConfigController {
      * Add or update configuration.
      * 新增或修改配置的入口
      * [notifyConfig] server 步骤1: 控制台发布请求，这是整个配置变更通知流程的起点
+     * [cluster_derby_notifyConfig] 步骤1：控制台发布请求，集群在使用 derby 数据时配置变更通知流程的起点
      * @param request    HTTP servlet request.
      * @param configForm Configuration form.
      * @return Result containing success status.

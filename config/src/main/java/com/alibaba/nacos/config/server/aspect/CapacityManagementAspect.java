@@ -66,6 +66,7 @@ public class CapacityManagementAspect {
     
     /**
      * Intercept publish config operations to perform capacity management checks.
+     * [cluster_derby_notifyConfig] 步骤2：发布配置时切面处理逻辑
      */
     @Around(PUBLISH_CONFIG)
     public Object aroundPublishConfig(ProceedingJoinPoint pjp) throws Throwable {

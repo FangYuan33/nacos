@@ -122,7 +122,7 @@ public class ConfigOperationService {
         }
         
         ConfigOperateResult configOperateResult;
-        
+        // migrate?
         configMigrateService.publishConfigMigrate(configForm, configRequestInfo, configForm.getEncryptedDataKey());
         
         // formal publish 根据md5值进行 CAS 更新操作，先落数据库
