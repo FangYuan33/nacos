@@ -162,14 +162,18 @@ public class JRaftServer {
         selfPort = Integer.parseInt(info[1]);
         localPeerId = PeerId.parsePeer(self);
         nodeOptions = new NodeOptions();
-        
+
+        // 修改 raft 配置的超时时间，方便 debug
         // Set the election timeout time. The default is 5 seconds.
-        int electionTimeout = Math.max(ConvertUtils.toInt(config.getVal(RaftSysConstants.RAFT_ELECTION_TIMEOUT_MS),
-                RaftSysConstants.DEFAULT_ELECTION_TIMEOUT), RaftSysConstants.DEFAULT_ELECTION_TIMEOUT);
-        
+//        int electionTimeout = Math.max(ConvertUtils.toInt(config.getVal(RaftSysConstants.RAFT_ELECTION_TIMEOUT_MS),
+//                RaftSysConstants.DEFAULT_ELECTION_TIMEOUT), RaftSysConstants.DEFAULT_ELECTION_TIMEOUT);
+        int electionTimeout = 50000;
+
         rpcRequestTimeoutMs = ConvertUtils.toInt(raftConfig.getVal(RaftSysConstants.RAFT_RPC_REQUEST_TIMEOUT_MS),
                 RaftSysConstants.DEFAULT_RAFT_RPC_REQUEST_TIMEOUT_MS);
-        
+
+        rpcRequestTimeoutMs = 500000;
+
         nodeOptions.setSharedElectionTimer(true);
         nodeOptions.setSharedVoteTimer(true);
         nodeOptions.setSharedStepDownTimer(true);
@@ -411,7 +415,10 @@ public class JRaftServer {
     }
     
     public void applyOperation(Node node, Message data, FailoverClosure closure) {
+        // Task 是用户使用 jraft 最核心的类之一，用于向一个 raft 复制分组提交一个任务，这个任务提交到 leader，并复制到其他 follower 节点
         final Task task = new Task();
+        // done 任务的回调，在任务完成的时候通知此对象，无论成功还是失败。
+        // 这个 closure 将在 StateMachine#onApply(iterator) 方法应用到状态机的时候，可以拿到并调用，一般用于客户端应答的返回
         task.setDone(new NacosClosure(data, status -> {
             NacosClosure.NacosStatus nacosStatus = (NacosClosure.NacosStatus) status;
             closure.setThrowable(nacosStatus.getThrowable());
@@ -427,10 +434,12 @@ public class JRaftServer {
         } else {
             requestTypeFieldBytes[1] = ProtoMessageUtil.REQUEST_TYPE_WRITE;
         }
-        
+
+        // data 任务的数据，用户应当将要复制的业务数据通过一定序列化方式（比如 java/hessian2) 序列化成一个 ByteBuffer，放到 task 里
         byte[] dataBytes = data.toByteArray();
         task.setData((ByteBuffer) ByteBuffer.allocate(requestTypeFieldBytes.length + dataBytes.length)
                 .put(requestTypeFieldBytes).put(dataBytes).position(0));
+        // 使用 node 提交任务
         node.apply(task);
     }
     

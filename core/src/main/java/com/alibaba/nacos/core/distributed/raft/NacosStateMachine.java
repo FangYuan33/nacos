@@ -90,7 +90,12 @@ class NacosStateMachine extends StateMachineAdapter {
         this.groupId = processor.group();
         adapterToJraftSnapshot(processor.loadSnapshotOperate());
     }
-    
+
+    /**
+     * 最核心的方法，应用任务列表到状态机，任务将按照提交顺序应用。
+     * 请注意，当这个方法返回的时候，我们就认为这一批任务都已经成功应用到状态机上，如果你没有完全应用（比如错误、异常），
+     * 将会被当做一个 critical 级别的错误，报告给状态机的 onError 方法，错误类型为 ERROR_TYPE_STATE_MACHINE
+     */
     @Override
     public void onApply(Iterator iter) {
         // [raft] 步骤23: 状态机应用已提交的日志条目，这是 Raft 算法的核心执行环节
@@ -100,8 +105,11 @@ class NacosStateMachine extends StateMachineAdapter {
         NacosClosure closure = null;
         try {
             while (iter.hasNext()) {
+                // 结果通过 Status 告知，Status#isOk() 告诉你成功还是失败
                 Status status = Status.OK();
                 try {
+                    // 如果 task 没有设置 closure，那么 done 可能会是 null，
+                    // 另外在 follower 节点上，done 也是 null，因为 done 不会被复制到除了 leader 节点之外的其他 raft 节点
                     if (iter.done() != null) {
                         // [raft] 步骤24: 从 Leader 节点的日志条目中获取消息
                         closure = (NacosClosure) iter.done();
@@ -224,7 +232,11 @@ class NacosStateMachine extends StateMachineAdapter {
         NotifyCenter.publishEvent(
                 RaftEvent.builder().groupId(groupId).raftClusterInfo(JRaftUtils.toStrings(conf.getPeers())).build());
     }
-    
+
+    /**
+     * 当 critical 错误发生的时候，会调用此方法，RaftException 包含了 status 等详细的错误信息；
+     * 当这个方法被调用后，将不允许新的任务应用到状态机，直到错误被修复并且节点被重启
+     */
     @Override
     public void onError(RaftException e) {
         super.onError(e);

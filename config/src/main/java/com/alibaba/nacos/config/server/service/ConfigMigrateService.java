@@ -148,7 +148,7 @@ public class ConfigMigrateService {
      *
      * @throws Exception the exception
      */
-    @PostConstruct
+    //@PostConstruct
     public void migrate() throws Exception {
         oldTableVersion = namespacePersistService.isExistTable("config_info_beta");
         if (PropertyUtil.isGrayCompatibleModel() && oldTableVersion) {
