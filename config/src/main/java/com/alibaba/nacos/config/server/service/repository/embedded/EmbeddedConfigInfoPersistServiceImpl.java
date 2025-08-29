@@ -577,7 +577,7 @@ public class EmbeddedConfigInfoPersistServiceImpl implements ConfigInfoPersistSe
             if (configInfo.getAppName() == null) {
                 configInfo.setAppName(appNameTmp);
             }
-            
+            // [cluster_derby_notifyConfig] 步骤3：生成 Update SQL 保存在 EmbeddedStorageContextHolder 上下文中
             updateConfigInfoAtomicCas(configInfo, srcIp, srcUser, configAdvanceInfo);
             
             String configTags = configAdvanceInfo == null ? null : (String) configAdvanceInfo.get("config_tags");

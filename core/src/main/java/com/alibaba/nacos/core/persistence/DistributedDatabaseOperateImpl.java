@@ -439,7 +439,7 @@ public class DistributedDatabaseOperateImpl extends RequestProcessor4CP implemen
                     .putAllExtendInfo(EmbeddedStorageContextHolder.getCurrentExtendInfo())
                     .setType(sqlContext.getClass().getCanonicalName()).build();
             if (Objects.isNull(consumer)) {
-                // [cluster_derby_notifyConfig] 步骤3: raft 协议开始执行
+                // [cluster_derby_notifyConfig] 步骤4: raft 协议 write 开始执行，同步阻塞调用
                 Response response = this.protocol.write(request);
                 if (response.getSuccess()) {
                     return true;
@@ -524,6 +524,7 @@ public class DistributedDatabaseOperateImpl extends RequestProcessor4CP implemen
         final Lock lock = readLock;
         lock.lock();
         try {
+            // [cluster_derby_notifyConfig] 步骤7：执行写入数据库的操作
             List<ModifyRequest> sqlContext = serializer.deserialize(byteString.toByteArray(), List.class);
             sqlLimiter.doLimitForModifyRequest(sqlContext);
             boolean isOk = false;

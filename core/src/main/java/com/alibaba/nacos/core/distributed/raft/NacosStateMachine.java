@@ -98,7 +98,6 @@ class NacosStateMachine extends StateMachineAdapter {
      */
     @Override
     public void onApply(Iterator iter) {
-        // [raft] 步骤23: 状态机应用已提交的日志条目，这是 Raft 算法的核心执行环节
         int index = 0;
         int applied = 0;
         Message message;
@@ -111,16 +110,15 @@ class NacosStateMachine extends StateMachineAdapter {
                     // 如果 task 没有设置 closure，那么 done 可能会是 null，
                     // 另外在 follower 节点上，done 也是 null，因为 done 不会被复制到除了 leader 节点之外的其他 raft 节点
                     if (iter.done() != null) {
-                        // [raft] 步骤24: 从 Leader 节点的日志条目中获取消息
+                        // 从 Leader 节点的日志条目中获取消息
                         closure = (NacosClosure) iter.done();
                         message = closure.getMessage();
                     } else {
-                        // [raft] 步骤25: 从 Follower 节点复制的日志条目中解析消息
+                        // 从 Follower 节点复制的日志条目中解析消息
                         final ByteBuffer data = iter.getData();
                         message = ProtoMessageUtil.parse(data.array());
                         if (message instanceof ReadRequest) {
-                            // [raft] 步骤26: Follower 节点忽略读请求，只处理写请求
-                            //'iter.done() == null' means current node is follower, ignore read operation
+                            // Follower 节点忽略读请求，只处理写请求
                             applied++;
                             index++;
                             iter.next();
@@ -129,15 +127,15 @@ class NacosStateMachine extends StateMachineAdapter {
                     }
                     
                     LoggerUtils.printIfDebugEnabled(Loggers.RAFT, "receive log : {}", message);
-                    
+
+                    // 应用写请求到业务状态机，实现数据的持久化存储
                     if (message instanceof WriteRequest) {
-                        // [raft] 步骤27: 应用写请求到业务状态机，实现数据的持久化存储
                         Response response = processor.onApply((WriteRequest) message);
                         postProcessor(response, closure);
                     }
-                    
+
+                    // 处理读请求（仅在 Leader 节点）
                     if (message instanceof ReadRequest) {
-                        // [raft] 步骤28: 处理读请求（仅在 Leader 节点）
                         Response response = processor.onRequest((ReadRequest) message);
                         postProcessor(response, closure);
                     }
@@ -155,7 +153,7 @@ class NacosStateMachine extends StateMachineAdapter {
                 iter.next();
             }
         } catch (Throwable t) {
-            // [raft] 步骤29: 状态机应用失败时进行回滚，保证数据一致性
+            // 状态机应用失败时进行回滚，保证数据一致性
             Loggers.RAFT.error("processor : {}, stateMachine meet critical error: {}.", processor, t);
             iter.setErrorAndRollback(index - applied,
                     new Status(RaftError.ESTATEMACHINE, "StateMachine meet critical error: %s.",
@@ -166,10 +164,12 @@ class NacosStateMachine extends StateMachineAdapter {
     public void setNode(Node node) {
         this.node = node;
     }
-    
+
+    /**
+     * 保存快照，用于日志压缩和节点快速恢复
+     */
     @Override
     public void onSnapshotSave(SnapshotWriter writer, Closure done) {
-        // [raft] 步骤30: 保存快照，用于日志压缩和节点快速恢复
         for (JSnapshotOperation operation : operations) {
             try {
                 operation.onSnapshotSave(writer, done);
@@ -180,10 +180,12 @@ class NacosStateMachine extends StateMachineAdapter {
             }
         }
     }
-    
+
+    /**
+     * 加载快照，新节点加入集群或节点重启时快速恢复状态
+     */
     @Override
     public boolean onSnapshotLoad(SnapshotReader reader) {
-        // [raft] 步骤31: 加载快照，新节点加入集群或节点重启时快速恢复状态
         for (JSnapshotOperation operation : operations) {
             try {
                 if (!operation.onSnapshotLoad(reader)) {
@@ -197,10 +199,12 @@ class NacosStateMachine extends StateMachineAdapter {
         }
         return true;
     }
-    
+
+    /**
+     * 当前节点成为 Leader，更新本地状态并通知集群
+     */
     @Override
     public void onLeaderStart(final long term) {
-        // [raft] 步骤32: 当前节点成为 Leader，更新本地状态并通知集群
         super.onLeaderStart(term);
         this.term = term;
         this.isLeader.set(true);
@@ -208,27 +212,35 @@ class NacosStateMachine extends StateMachineAdapter {
         NotifyCenter.publishEvent(
                 RaftEvent.builder().groupId(groupId).leader(leaderIp).term(term).raftClusterInfo(allPeers()).build());
     }
-    
+
+    /**
+     * Leader 停止服务，重置 Leader 状态
+     */
     @Override
     public void onLeaderStop(final Status status) {
-        // [raft] 步骤33: Leader 停止服务，重置 Leader 状态
         super.onLeaderStop(status);
         this.isLeader.set(false);
     }
-    
+
+    /**
+     * 开始跟随新的 Leader，更新 Leader 信息和任期
+     *
+     * @param ctx context of leader change
+     */
     @Override
     public void onStartFollowing(LeaderChangeContext ctx) {
-        // [raft] 步骤34: 开始跟随新的 Leader，更新 Leader 信息和任期
         this.term = ctx.getTerm();
         this.leaderIp = ctx.getLeaderId().getEndpoint().toString();
         NotifyCenter.publishEvent(
                 RaftEvent.builder().groupId(groupId).leader(leaderIp).term(ctx.getTerm()).raftClusterInfo(allPeers())
                         .build());
     }
-    
+
+    /**
+     * 集群配置变更提交，通知集群成员变化
+     */
     @Override
     public void onConfigurationCommitted(Configuration conf) {
-        // [raft] 步骤35: 集群配置变更提交，通知集群成员变化
         NotifyCenter.publishEvent(
                 RaftEvent.builder().groupId(groupId).raftClusterInfo(JRaftUtils.toStrings(conf.getPeers())).build());
     }

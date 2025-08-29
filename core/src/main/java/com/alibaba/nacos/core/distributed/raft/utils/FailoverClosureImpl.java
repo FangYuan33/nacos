@@ -35,7 +35,8 @@ public class FailoverClosureImpl implements FailoverClosure {
     private volatile Response data;
     
     private volatile Throwable throwable;
-    
+
+    // [cluster_derby_notifyConfig] 步骤6：将 CompletableFuture 封装在 future 字段内辅助实现同步阻塞调用
     public FailoverClosureImpl(final CompletableFuture<Response> future) {
         this.future = future;
     }
@@ -52,6 +53,8 @@ public class FailoverClosureImpl implements FailoverClosure {
     
     @Override
     public void run(Status status) {
+        // [cluster_derby_notifyConfig] 当 status 为 OK 时，将 response 设置到 future 中，
+        // 调用 CompletableFuture#complete 方法标记任务完成，同步阻塞调用恢复，并返回结果值
         if (status.isOk()) {
             future.complete(data);
             return;

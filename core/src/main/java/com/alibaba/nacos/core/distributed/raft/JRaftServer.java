@@ -169,8 +169,8 @@ public class JRaftServer {
 //                RaftSysConstants.DEFAULT_ELECTION_TIMEOUT), RaftSysConstants.DEFAULT_ELECTION_TIMEOUT);
         int electionTimeout = 50000;
 
-        rpcRequestTimeoutMs = ConvertUtils.toInt(raftConfig.getVal(RaftSysConstants.RAFT_RPC_REQUEST_TIMEOUT_MS),
-                RaftSysConstants.DEFAULT_RAFT_RPC_REQUEST_TIMEOUT_MS);
+//        rpcRequestTimeoutMs = ConvertUtils.toInt(raftConfig.getVal(RaftSysConstants.RAFT_RPC_REQUEST_TIMEOUT_MS),
+//                RaftSysConstants.DEFAULT_RAFT_RPC_REQUEST_TIMEOUT_MS);
 
         rpcRequestTimeoutMs = 500000;
 
@@ -213,6 +213,7 @@ public class JRaftServer {
                 
                 // Initialize multi raft group service framework
                 isStarted = true;
+                // [raft] 创建多个 Raft 组，每个业务模块（如 config、naming）都有独立的 Raft 组
                 createMultiRaftGroup(processors);
                 Loggers.RAFT.info("========= The raft protocol start finished... =========");
             } catch (Exception e) {
@@ -223,7 +224,6 @@ public class JRaftServer {
     }
     
     synchronized void createMultiRaftGroup(Collection<RequestProcessor4CP> processors) {
-        // [raft] 步骤8: 创建多个 Raft 组，每个业务模块（如 config、naming）都有独立的 Raft 组
         // There is no reason why the LogProcessor cannot be processed because of the synchronization
         if (!this.isStarted) {
             this.processors.addAll(processors);
@@ -238,13 +238,13 @@ public class JRaftServer {
                 throw new DuplicateRaftGroupException(groupName);
             }
             
-            // [raft] 步骤9: 为每个 Raft 组创建独立的配置和节点选项
+            // 为每个 Raft 组创建独立的配置和节点选项
             // Ensure that each Raft Group has its own configuration and NodeOptions
             Configuration configuration = conf.copy();
             NodeOptions copy = nodeOptions.copy();
             JRaftUtils.initDirectory(parentPath, groupName, copy);
             
-            // [raft] 步骤10: 创建状态机，状态机是 Raft 算法的核心组件，负责应用日志条目
+            // 创建状态机，状态机是 Raft 算法的核心组件，负责 apply 日志条目
             // Here, the LogProcessor is passed into StateMachine, and when the StateMachine
             // triggers onApply, the onApply of the LogProcessor is actually called
             NacosStateMachine machine = new NacosStateMachine(this, processor);
@@ -252,7 +252,7 @@ public class JRaftServer {
             copy.setFsm(machine);
             copy.setInitialConf(configuration);
             
-            // [raft] 步骤11: 配置快照机制，用于日志压缩和快速恢复
+            // 配置快照机制，用于日志压缩和快速恢复
             // Set snapshot interval, default 1800 seconds
             int doSnapshotInterval = ConvertUtils.toInt(raftConfig.getVal(RaftSysConstants.RAFT_SNAPSHOT_INTERVAL_SECS),
                     RaftSysConstants.DEFAULT_RAFT_SNAPSHOT_INTERVAL_SECS);
@@ -263,7 +263,7 @@ public class JRaftServer {
             copy.setSnapshotIntervalSecs(doSnapshotInterval);
             Loggers.RAFT.info("create raft group : {}", groupName);
             
-            // [raft] 步骤12: 启动 Raft 组服务，开始参与 Leader 选举和日志复制
+            // 启动 Raft 组服务，开始参与 Leader 选举和日志复制
             RaftGroupService raftGroupService = new RaftGroupService(groupName, localPeerId, copy, rpcServer, true);
     
             // Because BaseRpcServer has been started before, it is not allowed to start again here
@@ -271,10 +271,10 @@ public class JRaftServer {
             machine.setNode(node);
             RouteTable.getInstance().updateConfiguration(groupName, configuration);
             
-            // [raft] 步骤13: 将自己注册到集群中，开始参与 Raft 协议
+            // 将自己注册到集群中，开始参与 Raft 协议
             RaftExecutor.executeByCommon(() -> registerSelfToCluster(groupName, localPeerId, configuration));
             
-            // [raft] 步骤14: 启动 Leader 自动刷新任务，定期更新路由表
+            // 启动 Leader 自动刷新任务，定期更新路由表
             // Turn on the leader auto refresh for this group
             Random random = new Random();
             long period = nodeOptions.getElectionTimeoutMs() + random.nextInt(5 * 1000);
@@ -283,9 +283,11 @@ public class JRaftServer {
             multiRaftGroup.put(groupName, new RaftGroupTuple(node, processor, raftGroupService, machine));
         }
     }
-    
+
+    /**
+     * [raft] 处理读请求，使用 ReadIndex 机制保证线性一致性读
+     */
     CompletableFuture<Response> get(final ReadRequest request) {
-        // [raft] 步骤15: 处理读请求，使用 ReadIndex 机制保证线性一致性读
         final String group = request.getGroup();
         CompletableFuture<Response> future = new CompletableFuture<>();
         final RaftGroupTuple tuple = findTupleByGroup(group);
@@ -296,13 +298,14 @@ public class JRaftServer {
         final Node node = tuple.node;
         final RequestProcessor processor = tuple.processor;
         try {
-            // [raft] 步骤16: 使用 ReadIndex 机制确保读取到的数据是最新的已提交数据
+            // 使用 ReadIndex 机制确保读取到的数据是最新的已提交数据
+            // 其中 requestContext （第一个入参）提供给用户作为请求的附加上下文，可以在 closure 里再次拿到继续处理
             node.readIndex(BytesUtil.EMPTY_BYTES, new ReadIndexClosure() {
                 @Override
                 public void run(Status status, long index, byte[] reqCtx) {
+                    // ReadIndex 成功，传入的 closure 将被调用，可以安全地从本地状态机读取数据
                     if (status.isOk()) {
                         try {
-                            // [raft] 步骤17: ReadIndex 成功，可以安全地从本地状态机读取数据
                             Response response = processor.onRequest(request);
                             future.complete(response);
                         } catch (Throwable t) {
@@ -312,7 +315,7 @@ public class JRaftServer {
                         }
                         return;
                     }
-                    // [raft] 步骤18: ReadIndex 失败，降级到 Leader 读取保证一致性
+                    // ReadIndex 失败，降级到 Leader 读取保证一致性
                     MetricsMonitor.raftReadIndexFailed();
                     Loggers.RAFT.error("ReadIndex has error : {}, go to Leader read.", status.getErrorMsg());
                     MetricsMonitor.raftReadFromLeader();
@@ -321,7 +324,7 @@ public class JRaftServer {
             });
             return future;
         } catch (Throwable e) {
-            // [raft] 步骤19: ReadIndex 异常，直接从 Leader 读取
+            // ReadIndex 异常，直接从 Leader 读取
             MetricsMonitor.raftReadFromLeader();
             Loggers.RAFT.warn("Raft linear read failed, go to Leader read logic : {}", e.toString());
             // run raft read
@@ -333,10 +336,12 @@ public class JRaftServer {
     public void readFromLeader(final ReadRequest request, final CompletableFuture<Response> future) {
         commit(request.getGroup(), request, future);
     }
-    
+
+    /**
+     * [raft] 处理写请求，所有写操作必须通过 Leader 节点处理
+     */
     public CompletableFuture<Response> commit(final String group, final Message data,
             final CompletableFuture<Response> future) {
-        // [raft] 步骤20: 处理写请求，所有写操作必须通过 Leader 节点处理
         LoggerUtils.printIfDebugEnabled(Loggers.RAFT, "data requested this time : {}", data);
         final RaftGroupTuple tuple = findTupleByGroup(group);
         if (tuple == null) {
@@ -348,12 +353,10 @@ public class JRaftServer {
         
         final Node node = tuple.node;
         if (node.isLeader()) {
-            // [raft] 步骤21: 当前节点是 Leader，直接应用写操作到状态机
-            // The leader node directly applies this request
+            // 当前节点是 Leader，直接应用写操作到状态机
             applyOperation(node, data, closure);
         } else {
-            // [raft] 步骤22: 当前节点不是 Leader，将请求转发给 Leader 处理
-            // Forward to Leader for request processing
+            // 当前节点不是 Leader，将请求转发给 Leader 处理
             invokeToLeader(group, data, rpcRequestTimeoutMs, closure);
         }
         return future;
@@ -524,8 +527,7 @@ public class JRaftServer {
             }
             status = instance.refreshConfiguration(this.cliClientService, groupName, rpcRequestTimeoutMs);
             if (!status.isOk()) {
-                Loggers.RAFT
-                        .error("Fail to refresh route configuration for group : {}, status is : {}", groupName, status);
+                Loggers.RAFT.error("Fail to refresh route configuration for group : {}, status is : {}", groupName, status);
             }
         } catch (Exception e) {
             Loggers.RAFT.error("Fail to refresh raft metadata info for group : {}, error is : {}", groupName, e);

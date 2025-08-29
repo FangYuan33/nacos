@@ -112,25 +112,26 @@ public class JRaftProtocol extends AbstractConsistencyProtocol<RaftConfig, Reque
         this.raftServer = new JRaftServer();
         this.jRaftMaintainService = new JRaftMaintainService(raftServer);
     }
-    
+
+    /**
+     * [raft] 初始化 Raft 协议，确保只初始化一次
+     */
     @Override
     public void init(RaftConfig config) {
-        // [raft] 步骤1: 初始化 Raft 协议，确保只初始化一次
         if (initialized.compareAndSet(false, true)) {
             this.raftConfig = config;
-            // [raft] 步骤2: 注册 Raft 事件发布器，用于集群状态变更通知
+            // 注册 Raft 事件发布器，用于集群状态变更通知
             NotifyCenter.registerToSharePublisher(RaftEvent.class);
-            // [raft] 步骤3: 初始化并启动 JRaft 服务器
+            // [raft] 初始化并启动 JRaft 服务器
             this.raftServer.init(this.raftConfig);
             this.raftServer.start();
             
-            // [raft] 步骤4: 注册 Raft 事件订阅者，处理 Leader 选举、任期变更等事件
-            // There is only one consumer to ensure that the internal consumption
-            // is sequential and there is no concurrent competition
+            // 注册 Raft 事件订阅者，处理 Leader 选举、任期变更等事件，
+            // 只有一个消费者可以确保内部消费是连续的，没有并发竞争
             NotifyCenter.registerSubscriber(new Subscriber<RaftEvent>() {
                 @Override
                 public void onEvent(RaftEvent event) {
-                    // [raft] 步骤5: 处理 Raft 集群状态变更事件
+                    // 处理 Raft 集群状态变更事件
                     Loggers.RAFT.info("This Raft event changes : {}", event);
                     final String groupId = event.getGroupId();
                     Map<String, Map<String, Object>> value = new HashMap<>();
@@ -140,7 +141,7 @@ public class JRaftProtocol extends AbstractConsistencyProtocol<RaftConfig, Reque
                     final List<String> raftClusterInfo = event.getRaftClusterInfo();
                     final String errMsg = event.getErrMsg();
                     
-                    // [raft] 步骤6: 更新集群元数据信息（Leader、任期、成员列表）
+                    // 更新集群元数据信息（Leader、任期、成员列表）
                     // Leader information needs to be selectively updated. If it is valid data,
                     // the information in the protocol metadata is updated.
                     MapUtil.putIfValNoEmpty(properties, MetadataKey.LEADER_META_DATA, leader);
@@ -151,7 +152,7 @@ public class JRaftProtocol extends AbstractConsistencyProtocol<RaftConfig, Reque
                     value.put(groupId, properties);
                     metaData.load(value);
                     
-                    // [raft] 步骤7: 将元数据信息注入到节点的协议元数据中
+                    // 将元数据信息注入到节点的协议元数据中
                     // The metadata information is injected into the metadata information of the node
                     injectProtocolMetaData(metaData);
                 }
@@ -190,6 +191,7 @@ public class JRaftProtocol extends AbstractConsistencyProtocol<RaftConfig, Reque
     
     @Override
     public CompletableFuture<Response> writeAsync(WriteRequest request) {
+        // [cluster_derby_notifyConfig] 步骤5：依靠 CompletableFuture 实现阻塞同步调用
         return raftServer.commit(request.getGroup(), request, new CompletableFuture<>());
     }
     
