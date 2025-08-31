@@ -315,10 +315,10 @@ public class JRaftServer {
                         }
                         return;
                     }
-                    // ReadIndex 失败，降级到 Leader 读取保证一致性
                     MetricsMonitor.raftReadIndexFailed();
                     Loggers.RAFT.error("ReadIndex has error : {}, go to Leader read.", status.getErrorMsg());
                     MetricsMonitor.raftReadFromLeader();
+                    // ReadIndex 失败，降级到 Leader 读取保证一致性
                     readFromLeader(request, future);
                 }
             });
@@ -332,7 +332,8 @@ public class JRaftServer {
             return future;
         }
     }
-    
+
+    // raft log process
     public void readFromLeader(final ReadRequest request, final CompletableFuture<Response> future) {
         commit(request.getGroup(), request, future);
     }

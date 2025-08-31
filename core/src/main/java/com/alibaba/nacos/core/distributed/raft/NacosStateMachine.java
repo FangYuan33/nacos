@@ -92,7 +92,7 @@ class NacosStateMachine extends StateMachineAdapter {
     }
 
     /**
-     * 最核心的方法，应用任务列表到状态机，任务将按照提交顺序应用。
+     * 最核心的方法，应用任务列表应用到状态机，任务将按照提交顺序应用。
      * 请注意，当这个方法返回的时候，我们就认为这一批任务都已经成功应用到状态机上，如果你没有完全应用（比如错误、异常），
      * 将会被当做一个 critical 级别的错误，报告给状态机的 onError 方法，错误类型为 ERROR_TYPE_STATE_MACHINE
      */
@@ -107,11 +107,12 @@ class NacosStateMachine extends StateMachineAdapter {
                 // 结果通过 Status 告知，Status#isOk() 告诉你成功还是失败
                 Status status = Status.OK();
                 try {
-                    // 如果 task 没有设置 closure，那么 done 可能会是 null，
+                    // 如果 task 没有设置 closure，那么 done 会是 null，
                     // 另外在 follower 节点上，done 也是 null，因为 done 不会被复制到除了 leader 节点之外的其他 raft 节点
                     if (iter.done() != null) {
-                        // 从 Leader 节点的日志条目中获取消息
+                        // 获取回调函数
                         closure = (NacosClosure) iter.done();
+                        // 从 Leader 节点的日志条目中获取消息
                         message = closure.getMessage();
                     } else {
                         // 从 Follower 节点复制的日志条目中解析消息

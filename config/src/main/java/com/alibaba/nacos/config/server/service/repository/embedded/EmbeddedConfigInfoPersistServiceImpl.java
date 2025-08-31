@@ -635,12 +635,12 @@ public class EmbeddedConfigInfoPersistServiceImpl implements ConfigInfoPersistSe
         context.putWhereParameter(FieldConstant.GROUP_ID, configInfo.getGroup());
         context.putWhereParameter(FieldConstant.TENANT_ID, tenantTmp);
         context.putWhereParameter(FieldConstant.MD5, configInfo.getMd5());
+        // 生成 SQL 而不执行
         MapperResult mapperResult = configInfoMapper.updateConfigInfoAtomicCas(context);
         
         EmbeddedStorageContextHolder.addSqlContext(Boolean.TRUE, mapperResult.getSql(),
                 mapperResult.getParamList().toArray());
         return getConfigInfoOperateResult(configInfo.getDataId(), configInfo.getGroup(), tenantTmp);
-        
     }
     
     @Override
