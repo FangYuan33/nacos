@@ -752,56 +752,6 @@ public abstract class RpcClient implements Closeable {
     }
     
     /**
-     * send async request.
-     *
-     * @param request request.
-     * @return request future.
-     */
-    public RequestFuture requestFuture(Request request) throws NacosException {
-        int retryTimes = 0;
-        long start = System.currentTimeMillis();
-        Exception exceptionToThrow = null;
-        while (retryTimes <= rpcClientConfig.retryTimes() && System.currentTimeMillis() < start + rpcClientConfig
-                .timeOutMills()) {
-            boolean waitReconnect = false;
-            try {
-                if (this.currentConnection == null || !isRunning()) {
-                    waitReconnect = true;
-                    throw new NacosException(NacosException.CLIENT_DISCONNECT, "Client not connected.");
-                }
-                return this.currentConnection.requestFuture(request);
-            } catch (Exception e) {
-                if (waitReconnect) {
-                    try {
-                        // wait client to reconnect.
-                        Thread.sleep(100L);
-                    } catch (Exception exception) {
-                        // Do nothing.
-                    }
-                }
-                LoggerUtils.printIfErrorEnabled(LOGGER,
-                        "[{}] Send request fail, request = {}, retryTimes = {}, errorMessage = {}",
-                        rpcClientConfig.name(), request, retryTimes, e.getMessage());
-                exceptionToThrow = e;
-                
-            }
-            retryTimes++;
-        }
-        
-        if (rpcClientStatus.compareAndSet(RpcClientStatus.RUNNING, RpcClientStatus.UNHEALTHY)) {
-            switchServerAsyncOnRequestFail();
-        }
-        
-        if (exceptionToThrow != null) {
-            throw (exceptionToThrow instanceof NacosException) ? (NacosException) exceptionToThrow
-                    : new NacosException(SERVER_ERROR, exceptionToThrow);
-        } else {
-            throw new NacosException(SERVER_ERROR, "Request future fail, unknown error");
-        }
-        
-    }
-    
-    /**
      * connect to server.
      *
      * @param serverInfo server address to connect.

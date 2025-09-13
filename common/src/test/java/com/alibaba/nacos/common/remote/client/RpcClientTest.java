@@ -489,44 +489,6 @@ class RpcClientTest {
     }
     
     @Test
-    void testRequestFutureWithoutAnyTry() throws NacosException {
-        assertThrows(NacosException.class, () -> {
-            when(rpcClientConfig.retryTimes()).thenReturn(-1);
-            rpcClient.requestFuture(null);
-        });
-    }
-    
-    @Test
-    void testRequestFutureWhenClientAlreadyShutDownThenThrowException() throws NacosException {
-        assertThrows(NacosException.class, () -> {
-            rpcClient.rpcClientStatus.set(RpcClientStatus.SHUTDOWN);
-            rpcClient.currentConnection = connection;
-            rpcClient.requestFuture(null);
-        });
-    }
-    
-    @Test
-    void testRequestFutureWhenRetryReachMaxRetryTimesThenSwitchServer() throws NacosException {
-        when(rpcClientConfig.timeOutMills()).thenReturn(5000L);
-        when(rpcClientConfig.retryTimes()).thenReturn(3);
-        rpcClient.rpcClientStatus.set(RpcClientStatus.RUNNING);
-        rpcClient.currentConnection = connection;
-        doThrow(NacosException.class).when(connection).requestFuture(any());
-        Exception exception = null;
-        
-        try {
-            rpcClient.requestFuture(null);
-        } catch (NacosException e) {
-            exception = e;
-        }
-        
-        verify(connection, times(4)).requestFuture(any());
-        verify(rpcClient).switchServerAsyncOnRequestFail();
-        assertNotNull(exception);
-        assertEquals(RpcClientStatus.UNHEALTHY, rpcClient.rpcClientStatus.get());
-    }
-    
-    @Test
     void testRpcClientShutdownWhenClientDidntStart() throws NacosException {
         RpcClient rpcClient = new RpcClient(new RpcClientConfig() {
             @Override
