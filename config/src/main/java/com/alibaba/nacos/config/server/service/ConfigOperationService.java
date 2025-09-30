@@ -124,7 +124,7 @@ public class ConfigOperationService {
         ConfigOperateResult configOperateResult;
         // migrate?
         // configMigrateService.publishConfigMigrate(configForm, configRequestInfo, configForm.getEncryptedDataKey());
-        
+
         // formal publish 根据md5值进行 CAS 更新操作，先落数据库
         if (StringUtils.isNotBlank(configRequestInfo.getCasMd5())) {
             configOperateResult = configInfoPersistService.insertOrUpdateCas(configRequestInfo.getSrcIp(),
@@ -145,13 +145,16 @@ public class ConfigOperationService {
                     configOperateResult = configInfoPersistService.addConfigInfo(configRequestInfo.getSrcIp(),
                             configForm.getSrcUser(), configInfo, configAdvanceInfo);
                 } catch (DataIntegrityViolationException ive) {
-                    LOGGER.warn("[publish-config-failed] config already exists. dataId: {}, group: {}, namespaceId: {}",
-                            configForm.getDataId(), configForm.getGroup(), configForm.getNamespaceId());
-                    throw new ConfigAlreadyExistsException(
-                            String.format("config already exist, dataId: %s, group: %s, namespaceId: %s",
-                                    configForm.getDataId(), configForm.getGroup(), configForm.getNamespaceId()));
+                    configOperateResult = new ConfigOperateResult(false);
                 }
             }
+        }
+        if (!configOperateResult.isSuccess()) {
+            LOGGER.warn("[publish-config-failed] config already exists. dataId: {}, group: {}, namespaceId: {}",
+                    configForm.getDataId(), configForm.getGroup(), configForm.getNamespaceId());
+            throw new ConfigAlreadyExistsException(
+                    String.format("config already exist, dataId: %s, group: %s, namespaceId: %s",
+                            configForm.getDataId(), configForm.getGroup(), configForm.getNamespaceId()));
         }
         // [notifyConfig] server 步骤3: 发布 ConfigDataChangeEvent 配置变更事件
         // AsyncNotifyService 消费事件通知集群其他节点；DumpService 消费事件创建转存任务
