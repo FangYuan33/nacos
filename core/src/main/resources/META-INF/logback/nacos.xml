@@ -327,7 +327,7 @@
 
     <Logger name="com.alibaba.nacos.core.protocol.raft" additivity="false">
         <level value="DEBUG"/>
-        <appender-ref ref="CONSOLE"/>
+    <!--        <appender-ref ref="CONSOLE"/>-->
     </Logger>
 
     <Logger name="com.alibaba.nacos.core.protocol.distro" additivity="false">

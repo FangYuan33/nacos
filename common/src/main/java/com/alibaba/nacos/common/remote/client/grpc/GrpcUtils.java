@@ -73,7 +73,7 @@ public class GrpcUtils {
      * @return payload.
      */
     public static Payload convert(Request request) {
-        
+        // Metadata#type is used to identify the request type, strategy pattern.
         Metadata newMeta = Metadata.newBuilder().setType(request.getClass().getSimpleName())
                 .setClientIp(NetUtils.localIp()).putAllHeaders(request.getHeaders()).build();
         

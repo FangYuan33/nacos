@@ -20,6 +20,8 @@ import com.alibaba.nacos.Nacos;
 import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.PropertyKeyConst;
 import com.alibaba.nacos.api.config.ConfigService;
+import com.alibaba.nacos.api.config.listener.ConfigFuzzyWatchChangeEvent;
+import com.alibaba.nacos.api.config.listener.FuzzyWatchEventWatcher;
 import com.alibaba.nacos.api.config.listener.Listener;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.api.naming.NamingService;
@@ -73,6 +75,30 @@ class ConfigLongPollConfigITCase {
         ConfigCleanUtils.cleanClientCache();
         ConfigCleanUtils.changeToNewTestNacosHome(ConfigLongPollConfigITCase.class.getSimpleName());
         
+    }
+
+    @Test
+    void testFuzzyWatch() throws NacosException, InterruptedException {
+        Properties properties = new Properties();
+        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8850");
+        properties.put(PropertyKeyConst.CONFIG_LONG_POLL_TIMEOUT, "20000");
+        properties.put(PropertyKeyConst.CONFIG_RETRY_TIME, "3000");
+        properties.put(PropertyKeyConst.MAX_RETRY, "5");
+        ConfigService configService = NacosFactory.createConfigService(properties);
+
+        configService.fuzzyWatch("*", new FuzzyWatchEventWatcher() {
+            @Override
+            public void onEvent(ConfigFuzzyWatchChangeEvent event) {
+                System.out.println("FuzzyWatch: " + event);
+            }
+
+            @Override
+            public Executor getExecutor() {
+                return null;
+            }
+        });
+
+        TimeUnit.HOURS.sleep(2);
     }
 
     @Test
