@@ -84,6 +84,7 @@ class ConfigLongPollConfigITCase {
         properties.put(PropertyKeyConst.CONFIG_LONG_POLL_TIMEOUT, "20000");
         properties.put(PropertyKeyConst.CONFIG_RETRY_TIME, "3000");
         properties.put(PropertyKeyConst.MAX_RETRY, "5");
+        properties.put(PropertyKeyConst.CLIENT_WORKER_MAX_THREAD_COUNT, "2");
         ConfigService configService = NacosFactory.createConfigService(properties);
 
         configService.fuzzyWatch("*", new FuzzyWatchEventWatcher() {
@@ -100,6 +101,7 @@ class ConfigLongPollConfigITCase {
 
         TimeUnit.HOURS.sleep(2);
     }
+
 
     @Test
     void test() throws InterruptedException, NacosException {
