@@ -153,7 +153,7 @@ public class ConsoleMcpController {
     }
     
     /**
-     * Create new mcp server.
+     * Create new mcp server. /console/ai/mcp
      *
      * @param mcpForm create mcp server request form
      * @throws NacosException any exception during handling
