@@ -94,15 +94,15 @@ import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Executors;
 
 import static com.alibaba.nacos.api.common.Constants.APP_CONN_PREFIX;
 import static com.alibaba.nacos.api.common.Constants.ENCODE;
@@ -150,7 +150,7 @@ public class ClientWorker implements Closeable {
     private boolean enableRemoteSyncConfig = false;
     
     private static final int MIN_THREAD_NUM = 2;
-    
+
     private static final int THREAD_MULTIPLE = 1;
     
     private boolean enableClientMetrics = true;
@@ -544,10 +544,10 @@ public class ClientWorker implements Closeable {
 
         // 创建模糊配置 ConfigFuzzyWatchNotifyEvent 和 ConfigFuzzyWatchLoadEvent 事件的监听器
         configFuzzyWatchGroupKeyHolder = new ConfigFuzzyWatchGroupKeyHolder(agent, uuid);
-        // 创建调度线程池，用于执行长轮询任务
-        ScheduledExecutorService executorService = Executors.newScheduledThreadPool(initWorkerThreadCount(properties),
-                new NameThreadFactory("com.alibaba.nacos.client.Worker"));
-        agent.setExecutor(executorService);
+
+        ThreadPoolExecutor executor = instantiateClientExecutor(properties);
+        agent.setExecutor(executor);
+
         // [clientConnection] 步骤2 启动 RPC 客户端
         agent.start();
         // 启动模糊配置监听器
@@ -558,7 +558,21 @@ public class ClientWorker implements Closeable {
         this.appLabels = ConnLabelsUtils.addPrefixForEachKey(defaultLabelsCollectorManager.getLabels(properties),
                 APP_CONN_PREFIX);
     }
-    
+
+    private ThreadPoolExecutor instantiateClientExecutor(final NacosClientProperties properties) {
+        int workerThreadCount = initWorkerThreadCount(properties);
+
+        return new ThreadPoolExecutor(workerThreadCount, workerThreadCount * 2,
+                60 * 5, TimeUnit.SECONDS,
+                // when corePoolSize is not enough, task will not wait in queue, because SynchronousQueue 0 capacity
+                // will create new thread to execute task util maximumPoolSize is reached
+                new SynchronousQueue<>(),
+                new NameThreadFactory("com.alibaba.nacos.client.executor"),
+                // CallerRunsPolicy ensures that tasks are not lost
+                new ThreadPoolExecutor.CallerRunsPolicy()
+        );
+    }
+
     private int initWorkerThreadCount(NacosClientProperties properties) {
         int count = ThreadUtils.getSuitableThreadCount(THREAD_MULTIPLE);
         if (properties == null) {
@@ -646,7 +660,9 @@ public class ClientWorker implements Closeable {
     public class ConfigRpcTransportClient extends ConfigTransportClient {
         
         Map<String, ExecutorService> multiTaskExecutor = new HashMap<>();
-        
+
+        private ExecutorService listenExecutor;
+
         private final BlockingQueue<Object> listenExecutebell = new ArrayBlockingQueue<>(1);
         
         private final Object bellItem = new Object();
@@ -706,6 +722,10 @@ public class ClientWorker implements Closeable {
                         executor.shutdown();
                     }
                 });
+                if (listenExecutor != null && !listenExecutor.isShutdown()) {
+                    LOGGER.info("Shutdown listen config executor {}", listenExecutor);
+                    listenExecutor.shutdown();
+                }
             }
             
         }
@@ -854,14 +874,14 @@ public class ClientWorker implements Closeable {
         
         @Override
         public void startInternal() {
-            ScheduledExecutorService executor = getExecutor();
-            executor.schedule(() -> {
-                // 无限循环，直到执行器被关闭
-                while (!executor.isShutdown() && !executor.isTerminated()) {
+            listenExecutor =
+                    Executors.newSingleThreadExecutor(new NameThreadFactory("com.alibaba.nacos.client.listen-executor"));
+            listenExecutor.submit(() -> {
+                while (!listenExecutor.isShutdown() && !listenExecutor.isTerminated()) {
                     try {
                         // 阻塞等待通知，最多等待5秒
                         listenExecutebell.poll(5L, TimeUnit.SECONDS);
-                        if (executor.isShutdown() || executor.isTerminated()) {
+                        if (listenExecutor.isShutdown() || listenExecutor.isTerminated()) {
                             continue;
                         }
                         // [clientConnection] 步骤3 执行配置监听检查 - 这是长轮询的核心逻辑
@@ -877,8 +897,7 @@ public class ClientWorker implements Closeable {
                         notifyListenConfig();
                     }
                 }
-            }, 0L, TimeUnit.MILLISECONDS);
-            
+            });
         }
         
         @Override
