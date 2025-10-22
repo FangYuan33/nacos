@@ -126,7 +126,7 @@ public class ConfigCacheService {
                 DUMP_LOG.info(
                         "[dump] md5 changed, update md5 and timestamp in jvm cache ,groupKey={}, newMd5={},oldMd5={},lastModifiedTs={}",
                         groupKey, md5, localContentMd5, lastModifiedTs);
-                // 更新本地缓存对象 ConfigCache
+                // 更新本地缓存对象 CacheItem
                 updateMd5(groupKey, md5, content, lastModifiedTs, encryptedDataKey);
             } else if (newLastModified) {
                 DUMP_LOG.info(
@@ -155,7 +155,6 @@ public class ConfigCacheService {
         } finally {
             releaseWriteLock(groupKey);
         }
-        
     }
     
     /**

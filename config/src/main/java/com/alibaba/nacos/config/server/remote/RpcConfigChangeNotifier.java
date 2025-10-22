@@ -85,12 +85,13 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
      * @param groupKey groupKey
      */
     public void configDataChanged(String groupKey, String dataId, String group, String tenant) {
+        // 获取所有监听该配置的客户端连接
         Set<String> listeners = configChangeListenContext.getListeners(groupKey);
         if (CollectionUtils.isEmpty(listeners)) {
             return;
         }
+
         int notifyClientCount = 0;
-        // 获取所有监听该配置的客户端连接
         for (final String client : listeners) {
             Connection connection = connectionManager.getConnection(client);
             if (connection == null) {
@@ -103,10 +104,10 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
             ConnectionMeta metaInfo = connection.getMetaInfo();
             String clientIp = metaInfo.getClientIp();
             
-            // 构建ConfigChangeNotifyRequest消息，包含变更的配置信息
+            // 构建 ConfigChangeNotifyRequest 请求，包含变更的配置信息
             ConfigChangeNotifyRequest notifyRequest = ConfigChangeNotifyRequest.build(dataId, group, tenant);
             
-            // 创建RpcPushTask异步推送任务，支持重试机制
+            // 创建 RpcPushTask 异步推送任务，支持重试机制
             RpcPushTask rpcPushRetryTask = new RpcPushTask(notifyRequest,
                     ConfigCommonConfig.getInstance().getMaxPushRetryTimes(), client, clientIp, metaInfo.getAppName());
             // 异步推送通知
@@ -196,7 +197,7 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
                 // TPS限流检查失败，延迟重试推送任务
                 push(this, connectionManager);
             } else {
-                // TPS检查通过，通过 gRPC 连接推送配置变更通知到客户端
+                // TPS检查通过，通过 gRPC 双向流推送配置变更通知到客户端
                 rpcPushService.pushWithCallback(connectionId, notifyRequest,
                         new RpcPushCallback(this, tpsControlManager, connectionManager),
                         ConfigExecutor.getClientConfigNotifierServiceExecutor());

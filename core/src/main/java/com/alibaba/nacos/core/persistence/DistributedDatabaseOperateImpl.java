@@ -127,7 +127,7 @@ import java.util.stream.Collectors;
  *       4:execute result    └───────────────┘    └─────────────────────┘   │
  *               │                   │                       ▲              │
  *               │                   │                       │              │
- *               │                   │                  3:onApply         2:submit(List&lt;ModifyRequest&gt;)
+ *               │                   │                  3:onApply         2:submit(List<ModifyRequest>)
  *               │                   │                       │              │
  *               │                   ▼                       │              │
  *               │           ┌──────────────┐                │              │
@@ -435,6 +435,7 @@ public class DistributedDatabaseOperateImpl extends RequestProcessor4CP implemen
                     System.currentTimeMillis() + "-" + group() + "-" + memberManager.getSelf().getAddress() + "-"
                             + MD5Utils.md5Hex(sqlContext.toString(), PersistenceConstant.DEFAULT_ENCODE);
             WriteRequest request = WriteRequest.newBuilder().setGroup(group()).setKey(key)
+                    // 将 SQL 序列化成字节数组保存在 WriteRequest 中
                     .setData(ByteString.copyFrom(serializer.serialize(sqlContext)))
                     .putAllExtendInfo(EmbeddedStorageContextHolder.getCurrentExtendInfo())
                     .setType(sqlContext.getClass().getCanonicalName()).build();

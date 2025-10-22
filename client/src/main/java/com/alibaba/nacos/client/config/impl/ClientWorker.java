@@ -539,7 +539,7 @@ public class ClientWorker implements Closeable {
         
         init(properties);
         
-        // 创建RPC传输客户端 - 这是长轮询的核心组件
+        // 创建RPC传输客户端
         agent = new ConfigRpcTransportClient(properties, serverListManager);
 
         // 创建模糊配置 ConfigFuzzyWatchNotifyEvent 和 ConfigFuzzyWatchLoadEvent 事件的监听器

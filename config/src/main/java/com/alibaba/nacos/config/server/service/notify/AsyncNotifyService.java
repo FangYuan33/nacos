@@ -111,17 +111,14 @@ public class AsyncNotifyService {
             MetricsMonitor.incrementConfigChangeCount(evt.tenant, evt.group, evt.dataId);
             // 集群中除了自己的所有节点
             Collection<Member> ipList = memberManager.allMembersWithoutSelf();
-            
-            // In fact, any type of queue here can be
+
             Queue<NotifySingleRpcTask> rpcQueue = new LinkedList<>();
             
             for (Member member : ipList) {
-                // grpc report data change only 生成通知其他节点数据变更的任务
+                // 生成通知其他节点数据变更的任务，包含配置信息和节点IP信息
                 NotifySingleRpcTask notifySingleRpcTask = generateTask(evt, member);
-                if (notifySingleRpcTask != null) {
-                    rpcQueue.add(notifySingleRpcTask);
-                }
-                
+                // 加入队列
+                rpcQueue.add(notifySingleRpcTask);
             }
             // 异步执行任务
             if (!rpcQueue.isEmpty()) {
@@ -175,18 +172,15 @@ public class AsyncNotifyService {
             String event = getNotifyEvent(task);
             if (memberManager.hasMember(member.getAddress())) {
                 // 将可能下线的服务放入异步队列延迟执行，健康的服务器直接通知
-                // start the health check and there are ips that are not monitored, put them directly in the notification queue, otherwise notify
                 boolean unHealthNeedDelay = isUnHealthy(member.getAddress());
                 if (unHealthNeedDelay) {
-                    // target ip is unhealthy, then put it in the notification list
                     ConfigTraceService.logNotifyEvent(task.getDataId(), task.getGroup(), task.getTenant(), null,
                             task.getLastModified(), InetUtils.getSelfIP(), event,
                             ConfigTraceService.NOTIFY_TYPE_UNHEALTH, 0, member.getAddress());
-                    // get delay time and set fail count to the task
                     asyncTaskExecute(task);
                 } else {
-                    // grpc report data change only
                     try {
+                        // gRPC 通知配置发生变更
                         configClusterRpcClientProxy.syncConfigChange(member, syncRequest,
                                 new AsyncRpcNotifyCallBack(AsyncNotifyService.this, task));
                     } catch (Exception e) {

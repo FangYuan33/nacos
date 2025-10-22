@@ -87,10 +87,8 @@ public class NacosConfigService implements ConfigService {
         // 创建并启动配置服务器列表管理器，负责维护可用的 Nacos 服务器地址
         ConfigServerListManager serverListManager = new ConfigServerListManager(clientProperties);
         serverListManager.start();
-        
-        // 创建客户端工作器 - 长轮询机制的核心组件
-        // 负责与服务端建立长轮询连接，监听配置变更
-        // [clientConnection] 步骤1 启动客户端
+
+        // [clientConnection] 步骤1 启动客户端，创建客户端的核心组件 ClientWorker
         this.worker = new ClientWorker(this.configFilterChainManager, serverListManager, clientProperties);
     }
     

@@ -237,15 +237,12 @@ public class LongPollingService {
         NotifyCenter.registerToPublisher(LocalDataChangeEvent.class, NotifyCenter.ringBufferSize);
         
         // Register A Subscriber to subscribe LocalDataChangeEvent.
-        NotifyCenter.registerSubscriber(new Subscriber() {
-            
+        NotifyCenter.registerSubscriber(new Subscriber<>() {
             @Override
             public void onEvent(Event event) {
-                if (event instanceof LocalDataChangeEvent) {
-                    LocalDataChangeEvent evt = (LocalDataChangeEvent) event;
+                if (event instanceof LocalDataChangeEvent evt) {
                     ConfigExecutor.executeLongPolling(new DataChangeTask(evt.groupKey));
                 }
-                
             }
             
             @Override
@@ -253,7 +250,6 @@ public class LongPollingService {
                 return LocalDataChangeEvent.class;
             }
         });
-        
     }
     
     public static final String LONG_POLLING_HEADER = "Long-Pulling-Timeout";
@@ -261,11 +257,15 @@ public class LongPollingService {
     public static final String LONG_POLLING_NO_HANG_UP_HEADER = "Long-Pulling-Timeout-No-Hangup";
     
     /**
-     * ClientLongPolling subscibers.
+     * ClientLongPolling subscribers.
      */
     final Queue<ClientLongPolling> allSubs;
     
     class DataChangeTask implements Runnable {
+
+        final String groupKey;
+
+        final long changeTime = System.currentTimeMillis();
 
         @Override
         public void run() {
@@ -295,10 +295,6 @@ public class LongPollingService {
         DataChangeTask(String groupKey) {
             this.groupKey = groupKey;
         }
-        
-        final String groupKey;
-        
-        final long changeTime = System.currentTimeMillis();
         
     }
     
