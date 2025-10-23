@@ -1,15 +1,17 @@
-## Nacos 源码深度畅游：Nacos 配置管理详解
+## Nacos 源码深度畅游：Nacos 配置同步详解
 
+大家好，我是 **方圆**。最近因为工作需要，学习了一下 Nacos 源码，顺便为 Nacos 开源项目提交了 10+ 个 PR，Nacos 是一个非常活跃且包容的社区，大家可以在 [Github-Nacos](https://github.com/alibaba/nacos) 关注并认领 ISSUE。本篇文章基于 Nacos 的 3.1.0 版本，准备详细解释一下 Nacos 对配置管理的核心流程，方便之后了解和学习 Nacos 的同学。
 
-单机部署 MySQL 数据库，集群部署 MySQL 数据库
+本文将主要分成两大部分：
 
-集群部署 Derby 数据库
+1. 当配置发生变更时，Nacos Server 服务端是如何保证配置数据的一致性的，在这个小节内我们会讨论两种情况，分别关于单机部署和集群部署
+2. 当配置发生变更时，Nacos Client 客户端是如何保证及时更新配置，并保证配置内容是最新的
 
-> 如果大家感兴趣，可以去 [Github-Nacos](https://github.com/alibaba/nacos) 将源码 clone 下来，Debug 调试整个流程。
+在每个部分我都会在讲解源码前将具体的逻辑使用图示整理出来，方便想理解原理而不想看源码的同学，同时也能让想看源码的同学快速入手。如果大家对 Nacos 感兴趣，可以将源码 clone 下来，Debug 调试整个流程，这样学习和理解的效果更深。
 
-### 服务端
+### Nacos 服务端
 
-当我们在 Nacos 控制台变更配置时，请求会由 `ConsoleConfigController` 来承接，调用其中的 `publishConfig` 发布配置的方法，如下所示：
+当我们在 Nacos 控制台变更配置时，不论是单机部署还是集群部署都会经过以下逻辑，请求会由 `ConsoleConfigController` 来承接，调用其中的 `publishConfig` 发布配置的方法，如下所示：
 
 ```java
 @NacosApi
@@ -82,7 +84,7 @@ public class ConfigProxy {
 
 ![img_1.png](img_1.png)
 
-`ConfigHandler` 是一个接口，它有多个实现类，当在 Nacos 中采用不同的配置时，会注入不同的实现类，所以这部分代理操作实际上根据不同的配置来选择不同的策略。 在这里我们仅关注 `ConfigInnerHandler` 实现策略，它会执行到 `ConfigOperationService#publishConfig` 发布配置的核心逻辑。这个方法的逻辑虽然很长，但是其中值得关注的内容我已经用序号标注了，分别为 “写入数据库的逻辑” 和 “发布 ConfigDataChangeEvent 配置变更事件”：
+`ConfigHandler` 是一个接口，它有多个实现类，当在 Nacos 中采用不同的配置时，会注入不同的实现类，所以这部分代理操作实际上根据不同的配置来选择不同的策略。在这里我们仅关注 `ConfigInnerHandler` 实现策略，它会执行到 `ConfigOperationService#publishConfig` 发布配置的核心逻辑。这个方法的逻辑虽然很长，但是其中值得关注的内容我已经用序号标注了，分别为 “写入数据库的逻辑” 和 “发布 `ConfigDataChangeEvent` 配置变更事件”：
 
 ```java
 public class ConfigOperationService {
@@ -164,6 +166,20 @@ public class ConfigOperationService {
 接下来我们根据 “单机部署，采用 MySQL 数据库” 和 “集群部署，采用内嵌 Derby 数据库” 来讨论具体的逻辑。
 
 #### 单机部署，采用 MySQL 数据库
+
+在单机部署并采用 MySQL 数据库时，Nacos 服务端在配置变更后执行逻辑的流程图如下所示：
+
+![nacos-single.png](nacos-single.png)
+
+在控制台变更配置后，会先写入 MySQL 数据库，写入成功继续执行，如果写入失败则抛出异常，控制台会提示配置写入失败，就不再执行后续的逻辑了。 
+
+在写入 MySQL 数据库成功后，会触发 `ConfigDataChangeEvent` 配置发生变更的事件，由 `DumpService` 监听并消费。消费这个事件时，会创建 `DumpTask` 任务，这个任务的作用有两个：将配置信息 **写入本地磁盘文件** 和 **写入服务 JVM 内存**，这样 **即使在 MySQL 数据库发生宕机时，客户端也能正常读取配置信息**，写入本地磁盘相当于做了数据库的容灾。`DumpTask` 被创建后会被保存在一个 `ConcurrentHashMap` 中，由一个 `ScheduledExecutorService` 定时 100ms 执行的线程池定期处理任务，**如果任务在执行时失败，都会被重新添加到 `ConcurrentHashMap` 中，无限次重试处理**。
+
+`DumpTask` 处理完成后，会再次发出 `LocalDataChangeEvent` 本地缓存变更事件，这个事件由 `RpcConfigChangeNotifier` 监听并消费。`RpcConfigChangeNotifier` 处理这个事件时会创建 `RpcPushTask` 为客户端推送配置变更的任务，这个任务同样会被添加到另一个 `ScheduledExecutorService` 中去执行，但是异步推送变更的任务不会无限重试，最多只会重试 3 次。在这里大家可能会有疑问：如果重试超过 3 次没有成功，那么 Nacos 客户端该如何获取到最新的配置变更呢？其实 Nacos 客户端不只是通过 Nacos 服务端推送获取配置变更，而且还能通过主动从 Nacos 服务端拉取获取配置变更，这个逻辑在后续的内容中解释。
+
+以上便是 Nacos 服务端在单机部署并采用 MySQL 数据库时主要的逻辑流程，接下来我们深入分析具体的源码。
+
+---
 
 在 “写入数据库的逻辑” 中，Nacos 区分了 MD5 是否为空的两种情况，MD5 在 Nacos 表示的是什么含义呢？Nacos 中的每项配置都会根据其 **配置的内容** 计算出 MD5 值，并将其存储在数据库中，因为 MD5 加密后输出长度固定，所以可以根据配置的 MD5 值快速判断配置内容是否发生变更。
 
@@ -583,6 +599,7 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
 
 ```java
 public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
+    
     class RpcPushTask implements Runnable {
 
         ConfigChangeNotifyRequest notifyRequest;
@@ -610,9 +627,10 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
             return maxRetryTimes > 0 && this.tryTimes >= maxRetryTimes;
         }
 
+        // 异步执行配置推送任务
         @Override
         public void run() {
-            // 异步执行配置推送任务
+            // 累加推送配置的重试次数
             tryTimes++;
             TpsCheckRequest tpsCheckRequest = new TpsCheckRequest();
 
@@ -631,15 +649,67 @@ public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
 }
 ```
 
-`RpcPushTask#run` 方法中会先检查限流配置，如果限流检查通过会通过 gRPC 推送配置变更到 Nacos Client，借助的是 gRPC 的双向流接口。`RpcPushTask` 在执行过程中都是没有被持久化的，也就是说一旦在执行过程中发生服务宕机，这些任务也会丢失，没有办法重启向订阅配置的客户端推送，这样会不会导致客户端无法收到配置变更通知呢？实际上是不会的，配置变更除了服务端会主动推送以外，客户端还存在主动拉取的机制，也就是说 **配置同步是推、拉结合的**，保证客户端能够及时感知到配置变更，客户端的具体逻辑我们在后文中再解释。
+`RpcPushTask#run` 方法中会先检查限流配置，如果限流检查通过会通过 gRPC 推送配置变更到 Nacos Client，借助的是 gRPC 的双向流接口，并根据结果调用 `RpcPushCallback` 中的回调方法，`RpcPushCallback` 是 `RpcConfigChangeNotifier` 的内部类。如果配置推送成功会记录推送成功统计，否则调用 `RpcConfigChangeNotifier#push` 方法重试推送配置，如果超过最大重试次数（3次）则注销掉客户端：
+
+```java
+public class RpcConfigChangeNotifier extends Subscriber<LocalDataChangeEvent> {
+    
+    static class RpcPushCallback extends AbstractPushCallBack {
+
+        RpcPushTask rpcPushTask;
+
+        TpsControlManager tpsControlManager;
+
+        ConnectionManager connectionManager;
+
+        public RpcPushCallback(RpcPushTask rpcPushTask, TpsControlManager tpsControlManager,
+                               ConnectionManager connectionManager) {
+            super(3000L);
+            this.rpcPushTask = rpcPushTask;
+            this.tpsControlManager = tpsControlManager;
+            this.connectionManager = connectionManager;
+        }
+
+        @Override
+        public void onSuccess() {
+            // 客户端成功接收配置变更通知，记录推送成功统计
+            TpsCheckRequest tpsCheckRequest = new TpsCheckRequest();
+            tpsCheckRequest.setPointName(POINT_CONFIG_PUSH_SUCCESS);
+            tpsControlManager.check(tpsCheckRequest);
+        }
+
+        @Override
+        public void onFail(Throwable e) {
+            // 推送失败，记录失败统计并进行重试
+            TpsCheckRequest tpsCheckRequest = new TpsCheckRequest();
+            tpsCheckRequest.setPointName(POINT_CONFIG_PUSH_FAIL);
+            tpsControlManager.check(tpsCheckRequest);
+            Loggers.REMOTE_PUSH.warn("Push fail, dataId={}, group={}, tenant={}, clientId={}",
+                    rpcPushTask.getNotifyRequest().getDataId(), rpcPushTask.getNotifyRequest().getGroup(),
+                    rpcPushTask.getNotifyRequest().getTenant(), rpcPushTask.getConnectionId(), e);
+            push(rpcPushTask, connectionManager);
+        }
+    }
+}
+```
+
+注意，`RpcPushTask` 在执行过程中都是没有被持久化的，也就是说一旦在执行过程中发生服务宕机，这些任务也会丢失，没有办法重新拉起向订阅配置的客户端推送，这样会不会导致客户端无法收到配置变更通知呢？实际上是不会的，配置变更除了服务端会主动推送以外，客户端还存在主动拉取的机制，也就是说 **配置同步是推、拉结合的**，保证客户端能够及时感知到配置变更，客户端的具体逻辑我们在后文中再解释。
 
 以上我们讲解了 Nacos Server 单机采用 MySQL 数据库部署时，保证配置变更高可用的机制，接下来我们再看一下当集群部署并使用内嵌 Derby 数据库时，保证配置变更高可用的实现。
 
 #### 集群部署，采用内嵌 Derby 数据库
 
-Nacos Server 在集群模式部署时，也可以使用 MySQL 数据库，不过因为集群模式使用 MySQL 数据库与单机模式使用 MySQL 数据库对数据一致性的保证没有区别，所以我们就不再讨论这种情况了。值得讨论的是：在集群模式下，Nacos Server 还支持使用内嵌数据库 Derby 部署，这种情况下，Nacos 采用了 Raft 算法保证了集群的强一致性，Raft 算法的实现它使用的是 [开源项目 JRaft](https://www.sofastack.tech/projects/sofa-jraft/overview/)。下面的内容我们根据源码来分析：当在 Nacos 控制台对配置进行修改时，Nacos 是如何借助 JRaft 保证数据一致性的。
+Nacos Server 在集群模式部署时，也可以使用 MySQL 数据库，不过因为集群模式使用 MySQL 数据库与单机模式使用 MySQL 数据库对数据一致性的保证没有区别，所以我们就不再讨论这种情况了。值得讨论的是：在集群模式下，Nacos Server 还支持使用内嵌数据库 Derby 部署，这种情况下，Nacos 采用了 Raft 算法保证了集群的强一致性，Raft 算法的实现它使用的是 [开源项目 JRaft](https://www.sofastack.tech/projects/sofa-jraft/overview/)。在本文中，我们不会具体讲解 Raft 算法的流程，如果大家感兴趣可以参考文章 [深入理解分布式共识算法 Raft](https://juejin.cn/post/7544003305972088878)。如下图所示：
 
-#### 配置修改流程源码分析
+![nacos-cluster.png](nacos-cluster.png)
+
+Nacos 在集群部署时，在控制台进行配置变更后，**请求只会打到其中一台服务上**，在这一台服务上会触发 JRaft 算法来完成各个服务内的 Derby 数据的写入，同样地，与写入 MySQL 的流程一致，只有在 JRaft 写入执行成功后才能继续处理。
+
+在接收到请求的这台服务上，它会像单机模式一样发送 `ConfigDataChangeEvent` 事件，触发文件转存的操作，因为这部分内容是重复的就不再赘述了。集群模式与单机模式不同的是还有一个 `AsyncNotifyService` 服务会监听消费 `ConfigDataChangeEvent` 事件。`AsyncNotifyService` 的功能是 **通知集群内其他节点触发文件转存的操作**，如图所示，它会将通知集群内每个节点的请求封装成 `NotifySingleRpcTask`，创建所有节点的通知任务后，打包创建 `AsyncRpcTask` 任务，这个任务会被添加到 `ScheduledExecutorService` 线程池中，由线程池异步延时处理，如果发生处理失败的情况，会重新提交到线程池中，作为新的任务进行处理，以此来保证通知任务的处理成功。
+
+以上就是 Nacos 在集群模式下采用 Derby 数据库时配置变更的处理流程，下面的内容我们根据源码来分析：当在 Nacos 控制台对配置进行修改时，Nacos 是如何借助 JRaft 保证数据一致性的。
+
+---
 
 同样地，`ConsoleConfigController#publishConfig` 方法是在 Nacos 控制台修改配置的入口，承接配置变更的 POST 请求：
 
@@ -1247,4 +1317,82 @@ public class ConfigChangeClusterSyncRequestHandler
 }
 ```
 
-它的逻辑非常简单，接受到请求后，执行文件 Dump 操作并通知连接到服务本身的所有 Nacos Client 客户端配置发生变更。至此，变更配置后 Nacos Server 端对配置数据一致性的保证相关的源码逻辑就已经讲解完了，接下来我们再看一下 Nacos Client 是如何接收配置变更并更新配置信息的。
+它的逻辑非常简单，接受到请求后，执行文件 Dump 操作并通知连接到服务本身的所有 Nacos Client 客户端配置发生变更。接下来，我们再看一下在 Nacos Server 端通过控制台查询配置数据时，读取 Derby 数据库是如何读取的。在开始具体的逻辑前，先给大家留一个问题：在集群模式部署时，每个集群实例都有一份配置数据的副本，当请求打到不同的实例时，如果存在实例未完成最新配置数据的写入，会不会存在多次请求不一致的情况呢？
+
+##### 在 Nacos Server 端通过控制台读取配置数据
+
+在 Nacos 集群模式下使用内嵌 Derby 数据库时遵循 Raft 算法，如果要查询配置信息时它采用的是 **ReadIndex Read 实现线性一致性读**，我们直接略过非核心代码，分析与 Raft 相关的源码部分：
+
+```java
+public class JRaftServer {
+    /**
+     * [raft] 处理读请求，使用 ReadIndex 机制保证线性一致性读
+     */
+    CompletableFuture<Response> get(final ReadRequest request) {
+        final String group = request.getGroup();
+        CompletableFuture<Response> future = new CompletableFuture<>();
+        final RaftGroupTuple tuple = findTupleByGroup(group);
+        if (Objects.isNull(tuple)) {
+            future.completeExceptionally(new NoSuchRaftGroupException(group));
+            return future;
+        }
+        final Node node = tuple.node;
+        final RequestProcessor processor = tuple.processor;
+        try {
+            // 使用 ReadIndex Read 机制确保读取到的数据是最新的已提交数据
+            // 其中 requestContext （第一个入参）提供给用户作为请求的附加上下文，可以在 closure 里再次拿到继续处理
+            node.readIndex(BytesUtil.EMPTY_BYTES, new ReadIndexClosure() {
+                @Override
+                public void run(Status status, long index, byte[] reqCtx) {
+                    // ReadIndex 成功，传入的 closure 将被调用，可以安全地从本地状态机读取数据
+                    if (status.isOk()) {
+                        try {
+                            Response response = processor.onRequest(request);
+                            future.complete(response);
+                        } catch (Throwable t) {
+                            MetricsMonitor.raftReadIndexFailed();
+                            future.completeExceptionally(new ConsistencyException(
+                                    "The conformance protocol is temporarily unavailable for reading", t));
+                        }
+                        return;
+                    }
+                    MetricsMonitor.raftReadIndexFailed();
+                    Loggers.RAFT.error("ReadIndex has error : {}, go to Leader read.", status.getErrorMsg());
+                    MetricsMonitor.raftReadFromLeader();
+                    // ReadIndex 失败，降级到 Leader 读取保证一致性
+                    readFromLeader(request, future);
+                }
+            });
+            return future;
+        } catch (Throwable e) {
+            // ReadIndex 异常，直接从 Leader 读取
+            MetricsMonitor.raftReadFromLeader();
+            Loggers.RAFT.warn("Raft linear read failed, go to Leader read logic : {}", e.toString());
+            // run raft read
+            readFromLeader(request, future);
+            return future;
+        }
+    }
+
+    // raft log process
+    public void readFromLeader(final ReadRequest request, final CompletableFuture<Response> future) {
+        commit(request.getGroup(), request, future);
+    }
+}
+```
+
+这部分源码比较简单，因为 JRaft 框架将 ReadIndex Read 的实现封装起来了，开放出了 `readIndex` 方法来直接复用，注意如果在 ReadIndex 时失败，会走 Raft Log 流程来处理读请求，这个开销就相对来说比较大了。如果大家对 Raft 算法不了解，可以阅读参考 [深入理解分布式共识算法 Raft](https://juejin.cn/post/7544003305972088878)。
+
+至此，变更配置后 Nacos Server 端对配置数据一致性的保证相关的源码逻辑就已经讲解完了，接下来我们就要看看 Nacos Client 是如何接收配置变更并更新配置信息的。
+
+### Nacos 客户端
+
+
+
+
+---
+
+### 巨人的肩膀
+
+- [掘金 - 深入理解分布式共识算法 Raft](https://juejin.cn/post/7544003305972088878)
+
