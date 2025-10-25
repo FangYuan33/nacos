@@ -77,8 +77,8 @@ public class ConfigChangeBatchListenRequestHandler
                 // 检查配置是否已经发生变更
                 boolean isUptoDate = ConfigCacheService.isUptodate(groupKey, md5, meta.getClientIp(), tag,
                         meta.getAppLabels());
+                // 如果配置已变更，添加变更的配置信息
                 if (!isUptoDate) {
-                    // 如果配置已变更，立即返回变更通知
                     configChangeBatchListenResponse.addChangeConfig(listenContext.getDataId(), listenContext.getGroup(),
                             listenContext.getTenant());
                 }

@@ -884,7 +884,7 @@ public class ClientWorker implements Closeable {
                         if (listenExecutor.isShutdown() || listenExecutor.isTerminated()) {
                             continue;
                         }
-                        // [clientConnection] 步骤3 执行配置监听检查 - 这是长轮询的核心逻辑
+                        // [clientConnection] 步骤3 执行配置监听检查
                         executeConfigListen();
                     } catch (Throwable e) {
                         LOGGER.error("[rpc listen execute] [rpc listen] exception", e);
@@ -923,12 +923,14 @@ public class ClientWorker implements Closeable {
             // 遍历所有缓存配置，按状态分类
             for (CacheData cache : cacheMap.get().values()) {
                 synchronized (cache) {
-                    // 检查本地配置（故障转移文件）
+                    // 1. 检查本地配置（故障转移文件）
                     checkLocalConfig(cache);
-                    
-                    // 如果与服务端一致且不需要全量同步，跳过
+
+                    // 这个变量在收到服务端推送配置变更的请求时会被修改为 false，否则为 true
                     if (cache.isConsistentWithServer()) {
+                        // 2. 检查配置变更，如果发生变更便通知各个监听器
                         cache.checkListenerMd5();
+                        // 如果与服务端配置一致且不需要全量同步，则跳过这个配置缓存接下来的逻辑
                         if (!needAllSync) {
                             continue;
                         }
@@ -971,7 +973,6 @@ public class ClientWorker implements Closeable {
             if (hasChangedKeys) {
                 notifyListenConfig();
             }
-            
         }
         
         /**
@@ -1142,7 +1143,6 @@ public class ClientWorker implements Closeable {
                             cacheData.getReceiveNotifyChanged().set(false);
                         }
                         // 将多个配置的监听请求合并为一个批量请求，提高网络效率
-                        // 这是真正的长轮询网络请求
                         ConfigBatchListenRequest configChangeListenRequest = buildConfigRequest(listenCaches);
                         configChangeListenRequest.setListen(true);
                         try {
@@ -1166,10 +1166,10 @@ public class ClientWorker implements Closeable {
                                         // 刷新配置内容并检查MD5，触发监听器回调
                                         refreshContentAndCheck(rpcClient, changeKey, !isInitializing);
                                     }
-                                    
                                 }
 
-                                // 某些配置可能通过服务端主动推送得到变更通知，但不在 changedConfigs 列表中
+                                // ReceiveNotifyChanged 已经在方法开始时被重置为 false，这段逻辑解决的是被重置为 false 之后，
+                                // 如果这期间仍有配置变更同步到 Nacos Client 时能一并处理
                                 for (CacheData cacheData : listenCaches) {
                                     if (cacheData.getReceiveNotifyChanged().get()) {
                                         String changeKey = GroupKey.getKeyTenant(cacheData.dataId, cacheData.group,
@@ -1181,7 +1181,7 @@ public class ClientWorker implements Closeable {
                                     }
                                 }
 
-                                // 处理未变更的配置，标记为与服务端一致
+                                // 若从服务端未获取到变更的配置，标记为与服务端一致
                                 for (CacheData cacheData : listenCaches) {
                                     cacheData.setInitializing(false);
                                     String groupKey = GroupKey.getKeyTenant(cacheData.dataId, cacheData.group,

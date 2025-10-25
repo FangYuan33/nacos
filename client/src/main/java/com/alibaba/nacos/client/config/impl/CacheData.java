@@ -456,6 +456,7 @@ public class CacheData {
                     envName, dataId, group, tenant, md5, listener);
             return;
         }
+        // 创建通知任务
         NotifyTask job = new NotifyTask() {
             
             @Override
@@ -492,6 +493,7 @@ public class CacheData {
                                     notifyWarnTimeout, Thread.currentThread()), notifyWarnTimeout,
                             TimeUnit.MILLISECONDS);
                     listenerWrap.inNotifying = true;
+                    // 回调监听器的方法，告知用户接收到的配置信息
                     listener.receiveConfigInfo(contentTmp);
                     // compare lastContent and content
                     if (listener instanceof AbstractConfigChangeListener) {
@@ -527,7 +529,7 @@ public class CacheData {
             }
         };
 
-        // 执行任务
+        // 执行任务：如果配置了线程池，则异步执行，否则同步执行
         try {
             if (null != listener.getExecutor()) {
                 LOGGER.info(
