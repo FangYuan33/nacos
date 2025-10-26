@@ -1,6 +1,6 @@
 ## Nacos 源码深度畅游：Nacos 配置同步详解
 
-大家好，我是 **方圆**。最近因为工作需要，学习了一下 Nacos 源码，顺便为 Nacos 开源项目提交了 10+ 个 PR，成为了 Nacos 项目的 Contributor。Nacos 是一个非常活跃且包容的社区，大家可以在 [Github-Nacos](https://github.com/alibaba/nacos) 关注并认领 ISSUE。本篇文章基于 Nacos 的 3.1.0 版本，准备详细解释一下 Nacos 对配置管理的核心流程，方便之后了解和学习 Nacos 的同学。
+大家好，我是 **方圆**。最近学习了一下 Nacos 源码，顺便为 Nacos 开源项目提交了 10+ 个 PR，成为了 Nacos 项目的 Contributor。Nacos 是一个非常活跃且包容的社区，大家可以在 [Github-Nacos](https://github.com/alibaba/nacos) 关注并认领 ISSUE。本篇文章基于 Nacos 的 3.1.0 版本，准备详细解释一下 Nacos 对配置管理的核心流程，方便之后了解和学习 Nacos 的同学。
 
 本文将主要分成两大部分：
 

@@ -118,7 +118,7 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
         Service service = event.getService();
         String clientId = event.getClientId();
         if (event instanceof ClientOperationEvent.ClientRegisterServiceEvent) {
-            // [registerInstance] 步骤18：处理客户端注册服务事件，将服务和客户端ID添加到发布者索引中
+            // [registerInstance] 步骤5：处理客户端注册服务事件，将服务和客户端ID添加到发布者索引 publisherIndexes 中
             addPublisherIndexes(service, clientId);
         } else if (event instanceof ClientOperationEvent.ClientDeregisterServiceEvent) {
             removePublisherIndexes(service, clientId);
@@ -132,10 +132,10 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
     private void addPublisherIndexes(Service service, String clientId) {
         String serviceChangedType = Constants.ServiceChangedType.INSTANCE_CHANGED;
         if (!publisherIndexes.containsKey(service)) {
-            // The only time the index needs to be updated is when the service is first created
+            // 唯一需要更新索引的时间是 "首次" 创建服务的时
             serviceChangedType = Constants.ServiceChangedType.ADD_SERVICE;
         }
-        // [registerInstance] 步骤19：发布服务变更事件，通知订阅者有新的服务实例注册
+        // 发布服务变更事件，通知订阅者有新的服务实例注册
         NotifyCenter.publishEvent(new ServiceEvent.ServiceChangedEvent(service, serviceChangedType, true));
         publisherIndexes.computeIfAbsent(service, key -> new ConcurrentHashSet<>()).add(clientId);
     }

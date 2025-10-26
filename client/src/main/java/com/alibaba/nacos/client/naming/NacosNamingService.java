@@ -157,6 +157,7 @@ public class NacosNamingService implements NamingService {
         Instance instance = new Instance();
         instance.setIp(ip);
         instance.setPort(port);
+        // 默认权重值为 1
         instance.setWeight(1.0);
         instance.setClusterName(clusterName);
         registerInstance(serviceName, groupName, instance);
@@ -169,6 +170,7 @@ public class NacosNamingService implements NamingService {
     
     @Override
     public void registerInstance(String serviceName, String groupName, Instance instance) throws NacosException {
+        // 参数校验
         NamingUtils.checkInstanceIsLegal(instance);
         checkAndStripGroupNamePrefix(instance, groupName);
         clientProxy.registerService(serviceName, groupName, instance);

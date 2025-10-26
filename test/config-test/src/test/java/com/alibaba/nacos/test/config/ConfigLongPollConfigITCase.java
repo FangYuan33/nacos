@@ -183,75 +183,41 @@ class ConfigLongPollConfigITCase {
 
     @Test
     void testNacosNamingService() throws InterruptedException, NacosException {
-        MemoryAnalyzer analyzer = new MemoryAnalyzer();
-        NamingServiceThreadPoolAnalyzer namingThreadPoolAnalyzer = new NamingServiceThreadPoolAnalyzer();
-
-        System.out.println("=== 第一阶段：Naming Service 初始状态 ===");
-        analyzer.takeSnapshot("Naming 初始状态");
-        TimeUnit.SECONDS.sleep(2);
-
-        System.out.println("=== 第二阶段：创建 NacosNamingService ===");
         Properties properties = new Properties();
         properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8848");
-        properties.put(PropertyKeyConst.NAMESPACE, "7430d8fe-99ce-4b20-866e-ed021a0652c9");
-        
+        properties.put(PropertyKeyConst.NAMESPACE, "public");
         NamingService namingService = NacosFactory.createNamingService(properties);
-        WeakReference<NamingService> namingServiceRef = new WeakReference<>(namingService);
 
-        analyzer.takeSnapshot("创建 NamingService 后");
-        namingThreadPoolAnalyzer.takeThreadPoolSnapshot("创建 NamingService 后", namingService);
-        TimeUnit.SECONDS.sleep(2);
-
-        System.out.println("=== 第三阶段：注册服务实例 ===");
         try {
             // 注册一个服务实例
             namingService.registerInstance("test-service", "127.0.0.1", 8080);
             
             // 添加事件监听器
-            namingService.subscribe("test-service", event -> {
-                System.out.println("服务实例变化: " + event);
-            });
-
-            analyzer.takeSnapshot("注册服务和监听器后");
-            namingThreadPoolAnalyzer.takeThreadPoolSnapshot("注册服务和监听器后", namingService);
-            TimeUnit.HOURS.sleep(3);
+            namingService.subscribe("test-service", event -> System.out.println("服务实例变化: " + event));
         } catch (Exception e) {
             System.out.println("服务注册失败(预期，因为服务器可能未启动): " + e.getMessage());
         }
 
-        System.out.println("=== 第四阶段：执行 shutDown ===");
-        namingThreadPoolAnalyzer.takeThreadPoolSnapshot("shutDown 前", namingService);
-        TimeUnit.SECONDS.sleep(5);
+        TimeUnit.HOURS.sleep(5);
         
         namingService.shutDown();
-        namingThreadPoolAnalyzer.takeThreadPoolSnapshot("shutDown 后", namingService);
-        namingService = null;
+    }
 
-        analyzer.takeSnapshot("Naming shutDown 后");
-        TimeUnit.SECONDS.sleep(8);
+    @Test
+    void testNacosNamingService2() throws InterruptedException, NacosException {
+        Properties properties = new Properties();
+        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8850");
+        properties.put(PropertyKeyConst.NAMESPACE, "public");
+        NamingService namingService = NacosFactory.createNamingService(properties);
 
-        System.out.println("=== 第五阶段：强制 GC ===");
-        analyzer.forceFullGCWithRetry();
-        analyzer.takeSnapshot("Naming GC 后");
-        
-        // 检查线程池回收状态
-        namingThreadPoolAnalyzer.checkThreadPoolRecycling();
-
-        // 检查 NamingService 是否被回收
-        if (namingServiceRef.get() == null) {
-            System.out.println("✓ NamingService 已被成功回收");
-        } else {
-            System.out.println("⚠ NamingService 仍然存在，可能存在内存泄漏");
+        try {
+            // 查询一个服务实例
+            System.out.println(namingService.selectOneHealthyInstance("test-service"));
+        } catch (Exception e) {
+            System.out.println("服务注册失败(预期，因为服务器可能未启动): " + e.getMessage());
         }
 
-        System.out.println("=== Naming Service 内存分析报告 ===");
-        analyzer.printAnalysisReport();
-        namingThreadPoolAnalyzer.printAnalysisReport();
-        printActiveNamingThreads();
-
-        System.out.println("Naming Service Profiler 快照分析...");
-        TimeUnit.SECONDS.sleep(10);
-        System.out.println("Profiler 快照分析完成");
+        namingService.shutDown();
     }
 
     private void printActiveThreads() {

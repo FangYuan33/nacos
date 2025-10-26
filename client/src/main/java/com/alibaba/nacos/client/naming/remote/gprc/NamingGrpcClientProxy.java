@@ -149,6 +149,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
     public void registerService(String serviceName, String groupName, Instance instance) throws NacosException {
         NAMING_LOGGER.info("[REGISTER-SERVICE] {} registering service {} with instance {}", namespaceId, serviceName,
                 instance);
+        // [registerInstance] 步骤 1：创建服务实例区分是否为临时
         if (instance.isEphemeral()) {
             registerServiceForEphemeral(serviceName, groupName, instance);
         } else {
@@ -262,7 +263,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
      * @throws NacosException nacos exception
      */
     public void doRegisterService(String serviceName, String groupName, Instance instance) throws NacosException {
-        // [registerInstance] 步骤1：客户端创建注册实例请求对象，包含命名空间、服务名、分组名和实例信息
+        // 客户端创建注册实例请求对象，包含命名空间、服务名、分组名和实例信息
         InstanceRequest request = new InstanceRequest(namespaceId, serviceName, groupName,
                 NamingRemoteConstants.REGISTER_INSTANCE, instance);
         // [registerInstance] 步骤2：通过gRPC协议向服务端发送注册请求

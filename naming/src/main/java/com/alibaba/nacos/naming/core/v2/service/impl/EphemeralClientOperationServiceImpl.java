@@ -54,10 +54,10 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
     
     @Override
     public void registerInstance(Service service, Instance instance, String clientId) throws NacosException {
-        // [registerInstance] 步骤11：验证实例的合法性（IP、端口等）
+        // 验证实例的合法性（IP、端口等）
         NamingUtils.checkInstanceIsLegal(instance);
     
-        // [registerInstance] 步骤12：从服务管理器获取单例服务对象
+        // [registerInstance] 步骤4：从服务管理器获取单例服务对象，如果不存在则创建
         // 这里会调用 ServiceManager.getSingleton() 方法，如果服务不存在会创建新的服务对象
         // 并且会将服务添加到 namespaceSingletonMaps 中，这是控制台 getServiceList 数据的来源
         Service singleton = ServiceManager.getInstance().getSingleton(service);
@@ -66,18 +66,18 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
                     String.format("Current service %s is persistent service, can't register ephemeral instance.",
                             singleton.getGroupedServiceName()));
         }
-        // [registerInstance] 步骤13：获取客户端连接对象并验证其合法性
+        // 获取客户端连接对象并验证其合法性
         Client client = clientManager.getClient(clientId);
         checkClientIsLegal(client, clientId);
-        // [registerInstance] 步骤14：将实例信息转换为发布信息对象
+        // 将实例信息转换为发布信息对象
         InstancePublishInfo instanceInfo = getPublishInfo(instance);
-        // [registerInstance] 步骤15：将实例添加到客户端的服务实例列表中
+        // 将实例添加到客户端的服务实例列表中
         client.addServiceInstance(singleton, instanceInfo);
         client.setLastUpdatedTime();
         client.recalculateRevision();
-        // [registerInstance] 步骤16：发布客户端注册服务事件，通知其他组件
+        // 发布客户端注册服务事件，通知其他组件
         NotifyCenter.publishEvent(new ClientOperationEvent.ClientRegisterServiceEvent(singleton, clientId));
-        // [registerInstance] 步骤17：发布实例元数据事件，完成注册流程
+        // 发布实例元数据事件，完成注册流程
         NotifyCenter
                 .publishEvent(new MetadataEvent.InstanceMetadataEvent(singleton, instanceInfo.getMetadataId(), false));
     }

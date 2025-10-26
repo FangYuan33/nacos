@@ -58,13 +58,13 @@ public class InstanceRequestHandler extends RequestHandler<InstanceRequest, Inst
     @Secured(action = ActionTypes.WRITE)
     @ExtractorManager.Extractor(rpcExtractor = InstanceRequestParamExtractor.class)
     public InstanceResponse handle(InstanceRequest request, RequestMeta meta) throws NacosException {
-        // [registerInstance] 步骤7：根据请求参数创建服务对象，设置为ephemeral（临时）服务
+        // [registerInstance] 步骤4：根据请求参数创建服务对象，设置为ephemeral（临时）服务
         Service service = Service.newService(request.getNamespace(), request.getGroupName(), request.getServiceName(),
                 true);
         InstanceUtil.setInstanceIdIfEmpty(request.getInstance(), service.getGroupedServiceName());
         switch (request.getType()) {
             case NamingRemoteConstants.REGISTER_INSTANCE:
-                // [registerInstance] 步骤8：根据请求类型分发到具体的注册实例方法
+                // 根据请求类型分发到具体的注册实例方法
                 return registerInstance(service, request, meta);
             case NamingRemoteConstants.DE_REGISTER_INSTANCE:
                 return deregisterInstance(service, request, meta);
@@ -76,9 +76,9 @@ public class InstanceRequestHandler extends RequestHandler<InstanceRequest, Inst
     
     private InstanceResponse registerInstance(Service service, InstanceRequest request, RequestMeta meta)
             throws NacosException {
-        // [registerInstance] 步骤9：调用客户端操作服务注册实例，传入服务、实例和连接ID
+        // 调用客户端操作服务注册实例，传入服务、实例和连接ID
         clientOperationService.registerInstance(service, request.getInstance(), meta.getConnectionId());
-        // [registerInstance] 步骤10：发布实例注册跟踪事件，记录注册操作的详细信息
+        // 发布实例注册跟踪事件，记录注册操作的详细信息
         NotifyCenter.publishEvent(new RegisterInstanceTraceEvent(System.currentTimeMillis(),
                 NamingRequestUtil.getSourceIpForGrpcRequest(meta), true, service.getNamespace(), service.getGroup(),
                 service.getName(), request.getInstance().getIp(), request.getInstance().getPort()));

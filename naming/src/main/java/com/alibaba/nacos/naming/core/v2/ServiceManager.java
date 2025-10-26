@@ -54,7 +54,7 @@ public class ServiceManager {
     
     /**
      * Get singleton service. Put to manager if no singleton.
-     * [registerInstance] 步骤12详细说明：此方法是控制台getServiceList数据的关键写入点
+     * [registerInstance] 步骤详细说明：此方法是控制台getServiceList数据的关键写入点
      * 1. 首先在singletonRepository中查找或创建服务单例
      * 2. 然后将服务添加到namespaceSingletonMaps中，这是按命名空间组织的服务集合
      * 3. namespaceSingletonMaps是控制台展示服务列表的数据源
