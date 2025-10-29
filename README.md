@@ -86,9 +86,3 @@ SELECT t.TABLENAME FROM SYS.SYSTABLES t, SYS.SYSSCHEMAS s WHERE s.SCHEMAID = t.S
 其他还有一些比较小的组件安全修复和提高代码质量的改动。
 
 ---
-
-Nacos 开源项目贡献者：提交 10+ PR，阅读过配置中心与注册中心实现的核心源码，理解其基于 Raft 协议以及自研的 Distro 协议的数据一致性保证机制与高可用设计
-
-- 服务注册的流程
-- 配置变更推送的底层机制
-- Distro 协议和 Raft 协议的区别，它们都是针对什么场景而生的
