@@ -67,3 +67,28 @@ nacos.core.auth.server.identity.value=nacos_fy
 SELECT t.TABLENAME FROM SYS.SYSTABLES t, SYS.SYSSCHEMAS s WHERE s.SCHEMAID = t.SCHEMAID
 ```
 
+---
+
+### 贡献
+
+#### Feature
+
+- [注册中心注册实例时，增加对不存在 namespace 校验的逻辑](https://github.com/alibaba/nacos/pull/13687)：在 Nacos 注册中心注册服务实例时，指定了 Nacos Server 中未创建的 namespace 时依然能够完成实例注册，但是这在控制台中却没办法看到，而并不影响服务的注册和发现。我为这个服务注册功能添加了校验逻辑，并且添加了是否启动校验的默认关闭的开关，避免升级后能够正常使用的 Nacos 服务出现不能注册服务的情况
+
+#### Bug
+
+- [修复查询灰度 Gray 数据的 Mapper 未注册的问题](https://github.com/alibaba/nacos/pull/13745)
+- [添加用户时可以添加用户名和密码为空的用户](https://github.com/alibaba/nacos/pull/13635)
+- [模糊监听配置信息时，通配符常量指定错误](https://github.com/alibaba/nacos/pull/13611/files)：应该赋值 * 通配符，但是赋值了 .* 通配符，导致无法模糊匹配
+- [War 包部署的 Nacos Server 停止后存在线程池资源未释放](https://github.com/alibaba/nacos/pull/13646)：当时我还写了 [一篇文章](https://juejin.cn/post/7543943764371259442) 记录这个 ISSUE，印象比较深。主要有两个问题，存在创建的线程池和线程执行忙任务，使用完成后未关闭；部分线程池注册了 JVM 退出时执行 shutDown 方法的钩子方法 `Runtime.getRuntime()#addShutdownHook`，这位 ISSUE 的提出人反馈说：使用 War 包部署多次卸载 Nacos Server 线上服务内存占用却不断升高，发现有未关闭的资源。解决这个 ISSUE 时，使用 IDEA Profiler 分析内存快照，触发 GC 后查看未释放的资源，并未这些资源添加适当的 shutDown 方法
+- [忙任务打满线程池影响其他任务执行](https://github.com/alibaba/nacos/pull/13878)：这是一个比较有意思的 ISSUE，Nacos 会为配置监听创建两个忙任务分别为监听配置和模糊监听配置，相当于两个执行 while(true) 任务的线程，这两个线程都会提交到同一个线程池中，但是如果服务只有 1 核的情况下，Nacos 默认会创建一个线程数为 2 的线程池，这两个忙任务线程一下就把这两个线程的容量占满了，其他需要执行的任务就积压没有线程处理了，解决这个问题就需要把线程池的职责进行分离：两个忙任务分别创建两个线程数为 1 的线程池，其他需要处理的任务也有专用的线程池，这样就能避免忙任务占满线程池的情况
+
+其他还有一些比较小的组件安全修复和提高代码质量的改动。
+
+---
+
+Nacos 开源项目贡献者：提交 10+ PR，阅读过配置中心与注册中心实现的核心源码，理解其基于 Raft 协议以及自研的 Distro 协议的数据一致性保证机制与高可用设计
+
+- 服务注册的流程
+- 配置变更推送的底层机制
+- Distro 协议和 Raft 协议的区别，它们都是针对什么场景而生的
