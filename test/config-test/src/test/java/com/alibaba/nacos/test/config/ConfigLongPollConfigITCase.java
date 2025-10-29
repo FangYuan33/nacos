@@ -190,10 +190,10 @@ class ConfigLongPollConfigITCase {
 
         try {
             // 注册一个服务实例
-            namingService.registerInstance("test-service", "127.0.0.1", 8080);
-            
+            namingService.registerInstance("test-service", "127.0.0.1", 8080, "clusterA");
+
             // 添加事件监听器
-            namingService.subscribe("test-service", event -> System.out.println("服务实例变化: " + event));
+//            namingService.subscribe("test-service", event -> System.out.println("服务实例变化: " + event));
         } catch (Exception e) {
             System.out.println("服务注册失败(预期，因为服务器可能未启动): " + e.getMessage());
         }
@@ -206,17 +206,17 @@ class ConfigLongPollConfigITCase {
     @Test
     void testNacosNamingService2() throws InterruptedException, NacosException {
         Properties properties = new Properties();
-        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8850");
+        properties.put(PropertyKeyConst.SERVER_ADDR, "127.0.0.1:8848");
         properties.put(PropertyKeyConst.NAMESPACE, "public");
         NamingService namingService = NacosFactory.createNamingService(properties);
 
         try {
             // 查询一个服务实例
-            System.out.println(namingService.selectOneHealthyInstance("test-service"));
+            namingService.registerInstance("test-service", "127.0.0.2", 8080, "clusterA");
         } catch (Exception e) {
             System.out.println("服务注册失败(预期，因为服务器可能未启动): " + e.getMessage());
         }
-
+        TimeUnit.HOURS.sleep(5);
         namingService.shutDown();
     }
 

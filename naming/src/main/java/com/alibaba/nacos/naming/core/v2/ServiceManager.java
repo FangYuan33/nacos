@@ -68,7 +68,6 @@ public class ServiceManager {
             return service;
         });
         // [registerInstance] 关键数据写入：将服务添加到命名空间服务映射表中
-        // 这是控制台getServiceList()方法通过getSingletons(namespace)获取数据的源头
         namespaceSingletonMaps.computeIfAbsent(result.getNamespace(), namespace -> new ConcurrentHashSet<>()).add(result);
         return result;
     }

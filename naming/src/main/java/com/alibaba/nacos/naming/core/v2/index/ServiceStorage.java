@@ -84,6 +84,7 @@ public class ServiceStorage {
             return result;
         }
         Service singleton = ServiceManager.getInstance().getSingleton(service);
+        // 设置该 Service 下所有的实例
         result.setHosts(getAllInstancesFromIndex(singleton));
         serviceDataIndexes.put(singleton, result);
         return result;
@@ -106,7 +107,9 @@ public class ServiceStorage {
     private List<Instance> getAllInstancesFromIndex(Service service) {
         Set<Instance> result = new HashSet<>();
         Set<String> clusters = new HashSet<>();
+        // 获取 ClientId
         for (String each : serviceIndexesManager.getAllClientsRegisteredService(service)) {
+            // 获取实例注册信息 InstancePublishInfo
             Optional<InstancePublishInfo> instancePublishInfo = getInstanceInfo(each, service);
             if (instancePublishInfo.isPresent()) {
                 InstancePublishInfo publishInfo = instancePublishInfo.get();
@@ -116,13 +119,14 @@ public class ServiceStorage {
                     List<Instance> batchInstance = parseBatchInstance(service, batchInstancePublishInfo, clusters);
                     result.addAll(batchInstance);
                 } else {
+                    // 根据请求时 InstancePublishInfo 的注册实例对象创建出 Instance 实例
                     Instance instance = parseInstance(service, instancePublishInfo.get());
                     result.add(instance);
                     clusters.add(instance.getClusterName());
                 }
             }
         }
-        // cache clusters of this service
+        // 缓存记录这个服务的集群
         serviceClusterIndex.put(service, clusters);
         return new LinkedList<>(result);
     }

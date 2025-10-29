@@ -223,6 +223,7 @@ public class NamingMetadataManager extends SmartSubscriber {
     
     @Override
     public void onEvent(Event event) {
+        // [registerInstance] 步骤8：处理实例元数据事件，管理实例元数据的过期状态
         if (event instanceof MetadataEvent.InstanceMetadataEvent) {
             handleInstanceMetadataEvent((MetadataEvent.InstanceMetadataEvent) event);
         } else if (event instanceof MetadataEvent.ServiceMetadataEvent) {
@@ -251,7 +252,6 @@ public class NamingMetadataManager extends SmartSubscriber {
     private void handleInstanceMetadataEvent(MetadataEvent.InstanceMetadataEvent event) {
         Service service = event.getService();
         String metadataId = event.getMetadataId();
-        // [registerInstance] 步骤20：处理实例元数据事件，管理实例元数据的过期状态
         if (containInstanceMetadata(service, metadataId)) {
             updateExpiredInfo(event.isExpired(),
                     ExpiredMetadataInfo.newExpiredInstanceMetadata(event.getService(), event.getMetadataId()));

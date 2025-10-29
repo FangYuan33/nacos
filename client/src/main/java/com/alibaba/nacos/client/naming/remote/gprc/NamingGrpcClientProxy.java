@@ -149,7 +149,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
     public void registerService(String serviceName, String groupName, Instance instance) throws NacosException {
         NAMING_LOGGER.info("[REGISTER-SERVICE] {} registering service {} with instance {}", namespaceId, serviceName,
                 instance);
-        // [registerInstance] 步骤 1：创建服务实例区分是否为临时
+        // [registerInstance] 步骤1：创建服务实例区分是否为临时
         if (instance.isEphemeral()) {
             registerServiceForEphemeral(serviceName, groupName, instance);
         } else {

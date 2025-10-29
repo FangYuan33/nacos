@@ -1,7 +1,41 @@
-## Nacos 源码深度畅游：注册核心流程详解
+## Nacos 源码深度畅游：注册中心核心流程详解
 
-- [registerInstance]
+本篇文章我们来了解一下 Nacos 另一大功能：注册中心。本文会先介绍一下 Nacos 注册中心的数据存储模型，让大家对 Nacos 注册中心有一个大致的理解，随后根据流程图简要介绍 Nacos 注册中心的核心流程，避免直接阅读源码时太过晦涩，并让大家对 Nacos 注册中心有一个基本的了解，随后阅读这一部分源码能让大家对分布式服务或注册中心有一个更好的认识，更好的理解 CP 或 AP 定理；注册中心内对数据一致性的保证；以及复杂流程中如何将各个操作解耦并不使操作丢失等等，以辅助大家日后的系统设计。
 
+---
+
+Nacos 的注册中心服务将服务的注册信息的 **存储模型** 分为三级，如下图所示：
+
+![img_2.png](img_2.png)
+
+1. 一级是 **服务**：例如系统的微服务划分，提供用户服务的 `user-service`，服务的类定义在 Nacos 中是 `com.alibaba.nacos.naming.core.v2.pojo.Service`
+2. 二级是 **集群**：比如可以按区域机房划分集群，北京集群、上海集群、广州集群等等，集群在 Nacos 中没有专门的类定义，使用 `clusterName` 识别
+3. 三级是 **实例**：例如北京机房的某台服务器部署的某个实例，实例的类定义在 Nacos 中是 `com.alibaba.nacos.api.naming.pojo.Instance`
+
+如果我们向 `test-server` 服务下，集群为 `clusterA` 下注册两个实例时（默认 public 的命名空间），在控制台查询实例信息时如下所示：
+
+![img_3.png](img_3.png)
+
+![img_4.png](img_4.png)
+
+在服务详情中会展示这个集群下所有的实例信息。在深入分析源码之前，我们还是根据流程图简述一下 Nacos 作为注册中心时，注册实例信息的核心流程： 
+
+![nacos-naming.drawio.png](nacos-naming.drawio.png)
+
+首先，Nacos Client 会对 Nacos Server 集群中某一个节点发送 gRPC 请求进行实例注册；服务端处理客户端请求时，会先将 **Service 信息** 和 **实例信息** 写入本地缓存，并触发 `ClientRegisterServiceEvent` 和 `ClientChangedEvent` 两个事件。
+
+`ClientRegisterServiceEvent` 事件的作用是创建推送给订阅了服务的客户端的任务，在 `ScheduledExecutorService` 中定时异步执行，并且有失败重试机制，保证客户端及时接收到注册实例发生变更的数据。
+
+`ClientChangedEvent` 事件的作用是创建延迟执行 Distro 协议数据同步的任务，同样也是依赖 `ScheduledExecutorService` 延迟执行。**Distro 协议是 Nacos 中专门用于处理临时实例数据一致性的分布式协议**，它保证集群内数据一致性的方法非常简单，由接收到实例注册信息的节点将数据异步发送给集群内其他节点，其他节点会向该节点一样执行一次实例注册的流程。能通过这么简单的方式来完成数据同步，因为以下原因：
+
+1. **服务注册数据模型的属性简化了分布式一致性问题，避免了复杂的冲突解决机制**：**服务实例通过多个维度确定唯一性**：命名空间 + 服务名 + 集群名 + IP地址 + 端口号，这种唯一性设计确保了同一个服务实例的注册信息在任何节点都是相同的，所以同一实例的注册信息在不同节点、不同时间先后写入都不会存在数据冲突问题，**写入操作是幂等的**，大大降低了保证数据一致性的复杂度
+2. 服务实例的注册信息是 **临时数据**：数据具有生命周期，会自动过期或被清理，不需要持久化存储，丢失后可以重新生成，降低了维护实例数据的难度
+3. 业务场景能够接受数据的 **最终一致性**：可用性（Availability）比一致性（Consistency）更重要，短时间内部分实例注册信息不一致不影响业务
+4. 多个 Nacos Client 客户端会连接到不同的 Nacos Server 服务端，相当于进行了 **分片**：每个服务节点负责特定的客户端实例，客户端注册的操作基本只在一个服务节点发生，大大降低了发生写入冲突的可能
+
+所以 Distro 协议才能如此简单和高效，保证 Nacos 集群内注册实例信息的 **最终一致性**。以上便是在 Nacos 注册中心注册实例的大致流程，做了一些省略，但是主要的原理没有改变：同步写入本地缓存记录服务和实例信息，异步处理事件执行客户端的订阅推送和 Distro 协议的数据同步，保证集群内实例信息的数据一致性，如果大家想深入到源码的细节中，欢迎阅读以下内容。
+
+### 源码分析
 
 以如下源码来作为注册服务实例的入口来验证向 Nacos 注册中心注册服务实例的逻辑：
 
@@ -16,7 +50,7 @@ public class TestNaming {
 
         try {
             // 注册一个服务实例
-            namingService.registerInstance("test-service", "127.0.0.1", 8080);
+            namingService.registerInstance("test-service", "127.0.0.1", 8080, "clusterA");
 
             // 添加事件监听器
             namingService.subscribe("test-service", event -> System.out.println("服务实例变化: " + event));
@@ -31,7 +65,7 @@ public class TestNaming {
 }
 ```
 
-最先它会执行 `NamingService#registerInstance` 方法：
+最先它会执行 `NamingService#registerInstance` 方法，`Instance` 对象便是存储模型的实例信息：
 
 ```java
 public class NacosNamingService implements NamingService {
@@ -187,7 +221,7 @@ public class InstanceRequestHandler extends RequestHandler<InstanceRequest, Inst
 }
 ```
 
-它会创建 `Service` 对象，如下所示：
+它会创建 `Service` 对象，它是存储模型中的服务信息，如下所示：
 
 ![img_1.png](img_1.png)
 
@@ -212,12 +246,12 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
         checkClientIsLegal(client, clientId);
         // 将实例信息转换为发布信息对象
         InstancePublishInfo instanceInfo = getPublishInfo(instance);
-        // 将实例添加到客户端的服务实例列表中
+        // [registerInstance] 步骤5：将实例信息 InstancePublishInfo 添加到客户端的服务实例列表中
         client.addServiceInstance(singleton, instanceInfo);
         client.setLastUpdatedTime();
         client.recalculateRevision();
-        // 发布客户端注册服务事件，通知其他组件
-        NotifyCenter.publishEvent(new ClientOperationEvent.ClientRegisterServiceEvent(singleton, clientId));
+        // 发布客户端注册服务事件
+        NotifyCenter.publishEvent(new ClientOperationEvent(singleton, clientId));
         // 发布实例元数据事件，完成注册流程
         NotifyCenter
                 .publishEvent(new MetadataEvent.InstanceMetadataEvent(singleton, instanceInfo.getMetadataId(), false));
@@ -256,11 +290,37 @@ public class ServiceManager {
 }
 ```
 
-我们重点关注 **[registerInstance] 步骤4**，在这个步骤完成了 **服务实例信息注册后本地缓存的写入**，它会被记录到 `ServiceManager#singletonRepository` 和 `ServiceManager#namespaceSingletonMaps` 两个变量中，并且在在首次通过 `ConcurrentHashMap#computeIfAbsent` 方法添加时会触发 `ServiceMetadataEvent` 事件，不过这个事件在我们本次的逻辑中不重要，所以就不再解释了。再回到 `registerInstance` 方法中，完成 `Service` 缓存的写入后还会发布两个事件：`ClientRegisterServiceEvent` 和 `InstanceMetadataEvent`，这两个事件我们按顺序看：
+在 **[registerInstance] 步骤4** 中完成了 **服务实例信息注册后本地缓存的写入**，它会被记录到 `ServiceManager#singletonRepository` 和 `ServiceManager#namespaceSingletonMaps` 两个变量中，并且在在首次通过 `ConcurrentHashMap#computeIfAbsent` 方法添加时会触发 `ServiceMetadataEvent` 事件，这个事件用于更新服务信息的元数据，比较简单就不再解释了，这有一点 **代码规范** 需要注意：它将 `ServiceManager#getSingleton` 命名为获取服务实例的方法，但是却在这个 `get` 方法中执行了写入逻辑，具有迷惑性，应该修改命名为 `registerAndGetSingleton` 才对。再回到 `registerInstance` 方法中，**[registerInstance] 步骤5** 也是一段重要的逻辑，它会在 `ConcurrentHashMap<Service, InstancePublishInfo> publishers` 记录注册实例的发布信息 `InstancePublishInfo`，包含 **实例的 IP，端口和集群等必要信息**，后续会从发布信息中来获取这些字段值，并且会触发 `ClientChangedEvent` 事件：
+
+```java
+public abstract class AbstractClient implements Client {
+
+    protected final ConcurrentHashMap<Service, InstancePublishInfo> publishers = new ConcurrentHashMap<>(16, 0.75f, 1);
+    
+    @Override
+    public boolean addServiceInstance(Service service, InstancePublishInfo instancePublishInfo) {
+        if (instancePublishInfo instanceof BatchInstancePublishInfo) {
+            InstancePublishInfo old = publishers.put(service, instancePublishInfo);
+            MetricsMonitor.incrementIpCountWithBatchRegister(old, (BatchInstancePublishInfo) instancePublishInfo);
+        } else {
+            // 记录实例的发布信息，用于后续从发布信息中解析获取注册实例的 IP 信息等
+            if (null == publishers.put(service, instancePublishInfo)) {
+                MetricsMonitor.incrementInstanceCount();
+            }
+        }
+        // 触发 ClientChangedEvent 事件
+        NotifyCenter.publishEvent(new ClientEvent.ClientChangedEvent(this));
+        Loggers.SRV_LOG.info("Client change for service {}, {}", service, getClientId());
+        return true;
+    }
+}
+```
+
+在 `registerInstance` 方法中还会发布两个事件：`ClientRegisterServiceEvent` 和 `InstanceMetadataEvent`，后者用于写入实例的元数据比较简单，就不再赘述了。在以上逻辑中，我们知道了服务信息 `Service` 被记录在了 `ServiceManager` 中，服务下实例的信息被保存在了 `AbstractClient#publishers` 字段中，接下来我们看 `ClientRegisterServiceEvent` 事件和 `ClientChangedEvent` 事件是如何被处理的。
 
 #### ClientRegisterServiceEvent
 
-`ClientRegisterServiceEvent` 事件由 `ClientServiceIndexesManager` 订阅并消费，如下方代码所示，它会触发 `ServiceChangedEvent` 事件：
+`ClientRegisterServiceEvent` 事件由 `ClientServiceIndexesManager` 订阅并消费，在这里也会记录服务信息，如下方代码所示，它还会触发 `ServiceChangedEvent` 事件：
 
 ```java
 @Component
@@ -272,7 +332,7 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
         Service service = event.getService();
         String clientId = event.getClientId();
         if (event instanceof ClientOperationEvent.ClientRegisterServiceEvent) {
-            // [registerInstance] 步骤4：处理客户端注册服务事件，将服务和客户端ID添加到发布者索引 publisherIndexes 中
+            // [registerInstance] 步骤6：处理客户端注册服务事件，将服务和客户端ID添加到发布者索引 publisherIndexes 中
             addPublisherIndexes(service, clientId);
         } else if (event instanceof ClientOperationEvent.ClientDeregisterServiceEvent) {
             removePublisherIndexes(service, clientId);
@@ -306,7 +366,7 @@ public class NamingSubscriberServiceV2Impl extends SmartSubscriber implements Na
     @Override
     public void onEvent(Event event) {
         if (event instanceof ServiceEvent.ServiceChangedEvent) {
-            // [registerInstance] 步骤5：处理服务变更事件，创建推送任务将服务变更通知给所有订阅者
+            // [registerInstance] 步骤7：处理服务变更事件，创建推送任务将服务变更通知给所有订阅者
             ServiceEvent.ServiceChangedEvent serviceChangedEvent = (ServiceEvent.ServiceChangedEvent) event;
             Service service = serviceChangedEvent.getService();
             delayTaskEngine.addTask(service, new PushDelayTask(service, PushConfig.getInstance().getPushTaskDelay()));
@@ -379,7 +439,7 @@ public class PushDelayTask extends AbstractDelayTask {
 }
 ```
 
-随后 `PushDelayTask` 会被 `PushDelayTaskProcessor` 处理，会被封装到 `PushExecuteTask` 任务中：
+我们能了解到 `PushDelayTask` 能够 **区分是推送给所有客户端还是只推送单一客户端，这么做的目的是可以针对某些推送异常的客户端进行任务重试**。随后 `PushDelayTask` 会被 `PushDelayTaskProcessor` 处理，会被封装到 `PushExecuteTask` 任务中：
 
 ```java
 private static class PushDelayTaskProcessor implements NacosTaskProcessor {
@@ -394,7 +454,7 @@ private static class PushDelayTaskProcessor implements NacosTaskProcessor {
     public boolean process(NacosTask task) {
         PushDelayTask pushDelayTask = (PushDelayTask) task;
         Service service = pushDelayTask.getService();
-        // [registerInstance] 步骤6：分发推送任务到执行器，准备将服务变更推送给客户端
+        // [registerInstance] 步骤8：分发推送任务到执行器，准备将服务变更推送给客户端
         NamingExecuteTaskDispatcher.getInstance()
                 .dispatchAndExecuteTask(service, new PushExecuteTask(service, executeEngine, pushDelayTask));
         return true;
@@ -449,7 +509,7 @@ public class PushExecuteTask extends AbstractExecuteTask {
     @Override
     public void run() {
         try {
-            // [registerInstance] 步骤7：生成推送数据，包含服务实例信息和元数据
+            // [registerInstance] 步骤9：生成推送数据，包含服务实例信息和元数据
             PushDataWrapper wrapper = generatePushData();
             ClientManager clientManager = delayTaskEngine.getClientManager();
             // 遍历目标客户端，向订阅了该服务的客户端推送数据
@@ -505,7 +565,493 @@ public class PushExecuteTask extends AbstractExecuteTask {
 }
 ```
 
-从以上逻辑中可知：服务注册信息将推送给每个订阅了这个服务的 Client，如果推送失败会重新添加 `PushDelayTask` 任务重试，以此来保证订阅服务实例信息的 Client 都接收到变更。
+从以上逻辑中可知：服务注册信息将推送给每个订阅了这个服务的 Client，如果推送失败会重新添加 `PushDelayTask` 任务重试，以此来保证订阅服务实例信息的 Client 都接收到变更。需要注意的是在 **[registerInstance] 步骤9** 中有以下非常关键的逻辑：
 
-#### InstanceMetadataEvent
+```java
+public class PushExecuteTask extends AbstractExecuteTask {
 
+    private final PushDelayTaskExecuteEngine delayTaskEngine;
+    
+    // 生成推送请求信息
+    private PushDataWrapper generatePushData() {
+        // 获取要推送的服务信息，包含实例信息
+        ServiceInfo serviceInfo = delayTaskEngine.getServiceStorage().getPushData(service);
+        ServiceMetadata serviceMetadata = delayTaskEngine.getMetadataManager().getServiceMetadata(service).orElse(null);
+        return new PushDataWrapper(serviceMetadata, serviceInfo);
+    }
+}
+
+@Component
+public class ServiceStorage {
+
+    private final ConcurrentMap<Service, Set<String>> serviceClusterIndex;
+    
+    public ServiceInfo getPushData(Service service) {
+        ServiceInfo result = emptyServiceInfo(service);
+        if (!ServiceManager.getInstance().containSingleton(service)) {
+            return result;
+        }
+        Service singleton = ServiceManager.getInstance().getSingleton(service);
+        result.setHosts(getAllInstancesFromIndex(singleton));
+        serviceDataIndexes.put(singleton, result);
+        return result;
+    }
+
+    private ServiceInfo emptyServiceInfo(Service service) {
+        ServiceInfo result = new ServiceInfo();
+        result.setName(service.getName());
+        result.setGroupName(service.getGroup());
+        result.setLastRefTime(System.currentTimeMillis());
+        result.setCacheMillis(switchDomain.getDefaultPushCacheMillis());
+        return result;
+    }
+
+    // 获取服务下所有的实例信息
+    private List<Instance> getAllInstancesFromIndex(Service service) {
+        Set<Instance> result = new HashSet<>();
+        Set<String> clusters = new HashSet<>();
+        // 获取 ClientId
+        for (String each : serviceIndexesManager.getAllClientsRegisteredService(service)) {
+            // 获取实例注册信息 InstancePublishInfo
+            Optional<InstancePublishInfo> instancePublishInfo = getInstanceInfo(each, service);
+            if (instancePublishInfo.isPresent()) {
+                InstancePublishInfo publishInfo = instancePublishInfo.get();
+                //If it is a BatchInstancePublishInfo type, it will be processed manually and added to the instance list
+                if (publishInfo instanceof BatchInstancePublishInfo) {
+                    BatchInstancePublishInfo batchInstancePublishInfo = (BatchInstancePublishInfo) publishInfo;
+                    List<Instance> batchInstance = parseBatchInstance(service, batchInstancePublishInfo, clusters);
+                    result.addAll(batchInstance);
+                } else {
+                    // 根据请求时 InstancePublishInfo 的注册实例对象创建出 Instance 实例
+                    Instance instance = parseInstance(service, instancePublishInfo.get());
+                    result.add(instance);
+                    clusters.add(instance.getClusterName());
+                }
+            }
+        }
+        // 缓存记录这个服务的集群
+        serviceClusterIndex.put(service, clusters);
+        return new LinkedList<>(result);
+    }
+}
+```
+
+在 `generatePushData` 方法中，生成了 `ServiceInfo` 对象，其中包含服务和该服务下注册的所有实例，实例信息是从 `InstancePublishInfo` 中解析出来的，实例的发布信息我们在上文中提到过。除此之外，还需要注意在 `getAllInstancesFromIndex` **读方法中包含了缓存写入的逻辑**，这种写法是非常不推荐的，具有迷惑性：谁会想到在读方法中还会包含写逻辑呢？所以在日常开发中一定要避免这种写法！
+
+总结一下：`ClientRegisterServiceEvent` 事件的作用是将服务实例的变更信息推送给订阅了这个服务的所有客户端。
+
+#### ClientChangedEvent
+
+`ClientChangedEvent` 事件会被 `DistroClientDataProcessor` 订阅并消费，在它的 `onEvent` 方法中的 `else` 逻辑中可以发现它调用了 `syncToAllServer` 方法，从方法名中可以大概能猜出来，在 Nacos 采用集群模式部署时，会通过这个方法将注册的服务信息同步到其他节点上：
+
+```java
+public class DistroClientDataProcessor extends SmartSubscriber implements DistroDataStorage, DistroDataProcessor {
+
+    private final DistroProtocol distroProtocol;
+    
+    @Override
+    public void onEvent(Event event) {
+        if (EnvUtil.getStandaloneMode()) {
+            return;
+        }
+        if (event instanceof ClientEvent.ClientVerifyFailedEvent) {
+            syncToVerifyFailedServer((ClientEvent.ClientVerifyFailedEvent) event);
+        } else {
+            // [registerInstance] 步骤10：同步所有服务
+            syncToAllServer((ClientEvent) event);
+        }
+    }
+
+    private void syncToAllServer(ClientEvent event) {
+        Client client = event.getClient();
+        if (isInvalidClient(client)) {
+            return;
+        }
+        // 区分客户端断开连接的事件客户端变更事件
+        if (event instanceof ClientEvent.ClientDisconnectEvent) {
+            DistroKey distroKey = new DistroKey(client.getClientId(), TYPE);
+            distroProtocol.sync(distroKey, DataOperation.DELETE);
+        } else if (event instanceof ClientEvent.ClientChangedEvent) {
+            DistroKey distroKey = new DistroKey(client.getClientId(), TYPE);
+            distroProtocol.sync(distroKey, DataOperation.CHANGE);
+        }
+    }
+}
+```
+
+在这个方法中，可以发现调用了 `DistroProtocol#sync` 方法，`DistroProtocol` 表示 **Distro 协议**：**专门用于处理临时实例数据一致性的分布式协议**，接下来我们通过 Nacos 的逻辑来了解一下这个协议。在 `DistroProtocol#sync` 方法中：
+
+```java
+@Component
+public class DistroProtocol {
+
+    private final DistroTaskEngineHolder distroTaskEngineHolder;
+    
+    public void sync(DistroKey distroKey, DataOperation action) {
+        sync(distroKey, action, DistroConfig.getInstance().getSyncDelayMillis());
+    }
+
+    public void sync(DistroKey distroKey, DataOperation action, long delay) {
+        for (Member each : memberManager.allMembersWithoutSelf()) {
+            syncToTarget(distroKey, action, each.getAddress(), delay);
+        }
+    }
+
+    public void syncToTarget(DistroKey distroKey, DataOperation action, String targetServer, long delay) {
+        DistroKey distroKeyWithTarget = new DistroKey(distroKey.getResourceKey(), distroKey.getResourceType(),
+                targetServer);
+        // 创建异步 DistroDelayTask 任务
+        DistroDelayTask distroDelayTask = new DistroDelayTask(distroKeyWithTarget, action, delay);
+        // 添加到任务列表中延迟执行
+        distroTaskEngineHolder.getDelayTaskExecuteEngine().addTask(distroKeyWithTarget, distroDelayTask);
+        if (Loggers.DISTRO.isDebugEnabled()) {
+            Loggers.DISTRO.debug("[DISTRO-SCHEDULE] {} to {}", distroKey, targetServer);
+        }
+    }
+}
+```
+
+它会创建一个 `DistroDelayTask` 添加到 `NacosDelayTaskExecuteEngine#tasks` 中，这个 `NacosDelayTaskExecuteEngine` 我们在配置发布的章节介绍过，本质上它是一个 `ScheduledExecutorService` 在每 100ms 执行一个 `ConcurrentHashMap<Object, AbstractDelayTask> tasks` 的任务。`DistroDelayTask` 任务中没有什么重要的逻辑，直接来看处理这个任务的实现类 `DistroDelayTaskProcessor`：
+
+```java
+public class DistroDelayTaskProcessor implements NacosTaskProcessor {
+    private final DistroTaskEngineHolder distroTaskEngineHolder;
+
+    private final DistroComponentHolder distroComponentHolder;
+
+    public DistroDelayTaskProcessor(DistroTaskEngineHolder distroTaskEngineHolder,
+                                    DistroComponentHolder distroComponentHolder) {
+        this.distroTaskEngineHolder = distroTaskEngineHolder;
+        this.distroComponentHolder = distroComponentHolder;
+    }
+
+    @Override
+    public boolean process(NacosTask task) {
+        if (!(task instanceof DistroDelayTask)) {
+            return true;
+        }
+        DistroDelayTask distroDelayTask = (DistroDelayTask) task;
+        DistroKey distroKey = distroDelayTask.getDistroKey();
+        switch (distroDelayTask.getAction()) {
+            case DELETE:
+                DistroSyncDeleteTask syncDeleteTask = new DistroSyncDeleteTask(distroKey, distroComponentHolder);
+                distroTaskEngineHolder.getExecuteWorkersManager().addTask(distroKey, syncDeleteTask);
+                return true;
+            case CHANGE:
+            case ADD:
+                // [registerInstance] 步骤11：创建 DistroSyncChangeTask 任务异步执行
+                DistroSyncChangeTask syncChangeTask = new DistroSyncChangeTask(distroKey, distroComponentHolder);
+                distroTaskEngineHolder.getExecuteWorkersManager().addTask(distroKey, syncChangeTask);
+                return true;
+            default:
+                return false;
+        }
+    }
+}
+```
+
+**[registerInstance] 步骤11** 会创建 `DistroSyncChangeTask` 任务同样添加到延迟执行的任务队列中等待处理，这个任务的逻辑我们先来看一下：
+
+```java
+public class DistroSyncChangeTask extends AbstractDistroExecuteTask {
+    
+    private static final DataOperation OPERATION = DataOperation.CHANGE;
+    
+    public DistroSyncChangeTask(DistroKey distroKey, DistroComponentHolder distroComponentHolder) {
+        super(distroKey, distroComponentHolder);
+    }
+    
+    @Override
+    protected DataOperation getDataOperation() {
+        return OPERATION;
+    }
+    
+    @Override
+    protected boolean doExecute() {
+        String type = getDistroKey().getResourceType();
+        DistroData distroData = getDistroData(type);
+        if (null == distroData) {
+            Loggers.DISTRO.warn("[DISTRO] {} with null data to sync, skip", toString());
+            return true;
+        }
+        // gRPC 通知其他节点服务实例信息
+        return getDistroComponentHolder().findTransportAgent(type).syncData(distroData, getDistroKey().getTargetServer());
+    }
+    
+    @Override
+    protected void doExecuteWithCallback(DistroCallback callback) {
+        String type = getDistroKey().getResourceType();
+        DistroData distroData = getDistroData(type);
+        if (null == distroData) {
+            Loggers.DISTRO.warn("[DISTRO] {} with null data to sync, skip", toString());
+            return;
+        }
+        // gRPC 通知其他节点服务实例信息
+        getDistroComponentHolder().findTransportAgent(type).syncData(distroData, getDistroKey().getTargetServer(), callback);
+    }
+    
+    @Override
+    public String toString() {
+        return "DistroSyncChangeTask for " + getDistroKey().toString();
+    }
+    
+    // 获取 Distro 要推送的数据
+    private DistroData getDistroData(String type) {
+        DistroData result = getDistroComponentHolder().findDataStorage(type).getDistroData(getDistroKey());
+        if (null != result) {
+            result.setType(OPERATION);
+        }
+        return result;
+    }
+}
+```
+
+它的源码很简短，主要关注 `doExecute` 和 `doExecuteWithCallback` 方法，这两个方法的逻辑是借助 gRPC 通知集群中其他节点，区别是是否在 gRPC 调用完成后执行回调函数，这个任务的执行是在 `NacosExecuteTaskExecuteEngine` 中异步执行的，因为在上文中讲解过就不再赘述了，失败重试采用的还是重新添加到任务队列中等待执行。除此之外我们也要弄清楚推送的 DistroData 中到底都包含哪些信息，如下代码所示，它会执行到 `AbstractClient#generateSyncData` 的逻辑中：
+
+```java
+public abstract class AbstractClient implements Client {
+    // ...
+    
+    @Override
+    public ClientSyncData generateSyncData() {
+        List<String> namespaces = new LinkedList<>();
+        List<String> groupNames = new LinkedList<>();
+        List<String> serviceNames = new LinkedList<>();
+
+        List<String> batchNamespaces = new LinkedList<>();
+        List<String> batchGroupNames = new LinkedList<>();
+        List<String> batchServiceNames = new LinkedList<>();
+
+        List<InstancePublishInfo> instances = new LinkedList<>();
+        List<BatchInstancePublishInfo> batchInstancePublishInfos = new LinkedList<>();
+        BatchInstanceData  batchInstanceData = new BatchInstanceData();
+        for (Map.Entry<Service, InstancePublishInfo> entry : publishers.entrySet()) {
+            InstancePublishInfo instancePublishInfo = entry.getValue();
+            if (instancePublishInfo instanceof BatchInstancePublishInfo) {
+                BatchInstancePublishInfo batchInstance = (BatchInstancePublishInfo) instancePublishInfo;
+                batchInstancePublishInfos.add(batchInstance);
+                buildBatchInstanceData(batchInstanceData, batchNamespaces, batchGroupNames, batchServiceNames, entry);
+                batchInstanceData.setBatchInstancePublishInfos(batchInstancePublishInfos);
+            } else {
+                namespaces.add(entry.getKey().getNamespace());
+                groupNames.add(entry.getKey().getGroup());
+                serviceNames.add(entry.getKey().getName());
+                instances.add(entry.getValue());
+            }
+        }
+        // 包含了命名空间、服务信息和实例信息（InstancePublishInfo 或 BatchInstanceData）等
+        ClientSyncData data = new ClientSyncData(getClientId(), namespaces, groupNames, serviceNames, instances, batchInstanceData);
+        data.getAttributes().addClientAttribute(REVISION, getRevision());
+        return data;
+    }
+}
+```
+
+虽然比较长，只看注释相关的内容即可，推送内容包含了命名空间、服务信息和实例信息等，这些信息大部分都来自 `InstancePublishInfo`，可见这个对象多么重要。
+
+`DistroSyncChangeTask` 任务会向其他节点发送 `DistroDataRequest` 请求，这个请求是如何被处理的呢？继续看 `DistroDataRequestHandler` 的逻辑：
+
+```java
+@InvokeSource(source = {RemoteConstants.LABEL_SOURCE_CLUSTER})
+@Component
+public class DistroDataRequestHandler extends RequestHandler<DistroDataRequest, DistroDataResponse> {
+
+    private final DistroProtocol distroProtocol;
+
+    public DistroDataRequestHandler(DistroProtocol distroProtocol) {
+        this.distroProtocol = distroProtocol;
+    }
+
+    @Override
+    @Secured(apiType = ApiType.INNER_API)
+    public DistroDataResponse handle(DistroDataRequest request, RequestMeta meta) throws NacosException {
+        try {
+            switch (request.getDataOperation()) {
+                case VERIFY:
+                    return handleVerify(request.getDistroData(), meta);
+                case SNAPSHOT:
+                    return handleSnapshot();
+                case ADD:
+                case CHANGE:
+                case DELETE:
+                    // [registerInstance] 步骤12 处理 DistroDataRequest 请求
+                    return handleSyncData(request.getDistroData());
+                case QUERY:
+                    return handleQueryData(request.getDistroData());
+                default:
+                    return new DistroDataResponse();
+            }
+        } catch (Exception e) {
+            Loggers.DISTRO.error("[DISTRO-FAILED] distro handle with exception", e);
+            DistroDataResponse result = new DistroDataResponse();
+            result.setResultCode(ResponseCode.FAIL.getCode());
+            result.setErrorCode(ResponseCode.FAIL.getCode());
+            result.setMessage("handle distro request with exception");
+            return result;
+        }
+    }
+
+    private DistroDataResponse handleSyncData(DistroData distroData) {
+        DistroDataResponse result = new DistroDataResponse();
+        if (!distroProtocol.onReceive(distroData)) {
+            result.setErrorCode(ResponseCode.FAIL.getCode());
+            result.setMessage("[DISTRO-FAILED] distro data handle failed");
+        }
+        return result;
+    }
+}
+```
+
+我们需要关注 `DistroProtocol#onReceive` 方法：
+
+```java
+@Component
+public class DistroProtocol {
+
+    private final DistroComponentHolder distroComponentHolder;
+    
+    public boolean onReceive(DistroData distroData) {
+        Loggers.DISTRO.info("[DISTRO] Receive distro data type: {}, key: {}", distroData.getType(),
+                distroData.getDistroKey());
+        String resourceType = distroData.getDistroKey().getResourceType();
+        DistroDataProcessor dataProcessor = distroComponentHolder.findDataProcessor(resourceType);
+        if (null == dataProcessor) {
+            Loggers.DISTRO.warn("[DISTRO] Can't find data process for received data {}", resourceType);
+            return false;
+        }
+        return dataProcessor.processData(distroData);
+    }
+}
+```
+
+它会执行到 `DistroClientDataProcessor#processData` 方法，其中的 `upgradeClient` 方法是关键：
+
+```java
+public class DistroClientDataProcessor extends SmartSubscriber implements DistroDataStorage, DistroDataProcessor {
+    
+    @Override
+    public boolean processData(DistroData distroData) {
+        switch (distroData.getType()) {
+            case ADD:
+            case CHANGE:
+                // [registerInstance] 步骤12：处理 Distro 协议同步的数据
+                ClientSyncData clientSyncData = ApplicationUtils.getBean(Serializer.class)
+                        .deserialize(distroData.getContent(), ClientSyncData.class);
+                handlerClientSyncData(clientSyncData);
+                return true;
+            case DELETE:
+                String deleteClientId = distroData.getDistroKey().getResourceKey();
+                Loggers.DISTRO.info("[Client-Delete] Received distro client sync data {}", deleteClientId);
+                clientManager.clientDisconnected(deleteClientId);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void handlerClientSyncData(ClientSyncData clientSyncData) {
+        Loggers.DISTRO
+                .info("[Client-Add] Received distro client sync data {}, revision={}", clientSyncData.getClientId(),
+                        clientSyncData.getAttributes().getClientAttribute(ClientConstants.REVISION, 0L));
+        clientManager.syncClientConnected(clientSyncData.getClientId(), clientSyncData.getAttributes());
+        Client client = clientManager.getClient(clientSyncData.getClientId());
+        // upgrade 是升级的含义，实际逻辑是完成 Distro 数据的写入
+        upgradeClient(client, clientSyncData);
+    }
+
+    private void upgradeClient(Client client, ClientSyncData clientSyncData) {
+        Set<Service> syncedService = new HashSet<>();
+        // process batch instance sync logic
+        processBatchInstanceDistroData(syncedService, client, clientSyncData);
+        List<String> namespaces = clientSyncData.getNamespaces();
+        List<String> groupNames = clientSyncData.getGroupNames();
+        List<String> serviceNames = clientSyncData.getServiceNames();
+        List<InstancePublishInfo> instances = clientSyncData.getInstancePublishInfos();
+
+        for (int i = 0; i < namespaces.size(); i++) {
+            Service service = Service.newService(namespaces.get(i), groupNames.get(i), serviceNames.get(i));
+            // 注册并获取服务信息
+            Service singleton = ServiceManager.getInstance().getSingleton(service);
+            syncedService.add(singleton);
+            InstancePublishInfo instancePublishInfo = instances.get(i);
+            if (!instancePublishInfo.equals(client.getInstancePublishInfo(singleton))) {
+                // 执行的是 [registerInstance] 步骤5 的逻辑：将实例信息 InstancePublishInfo 添加到客户端的服务实例列表中
+                client.addServiceInstance(singleton, instancePublishInfo);
+                // 触发 ClientRegisterServiceEvent 事件
+                NotifyCenter.publishEvent(
+                        new ClientOperationEvent.ClientRegisterServiceEvent(singleton, client.getClientId()));
+                NotifyCenter.publishEvent(
+                        new MetadataEvent.InstanceMetadataEvent(singleton, instancePublishInfo.getMetadataId(), false));
+            }
+        }
+        for (Service each : client.getAllPublishedService()) {
+            if (!syncedService.contains(each)) {
+                client.removeServiceInstance(each);
+                NotifyCenter.publishEvent(
+                        new ClientOperationEvent.ClientDeregisterServiceEvent(each, client.getClientId()));
+            }
+        }
+        client.setRevision(clientSyncData.getAttributes().<Integer>getClientAttribute(ClientConstants.REVISION, 0));
+    }
+}
+```
+
+`DistroClientDataProcessor#upgradeClient` 方法会执行时就和开篇介绍的 `EphemeralClientOperationServiceImpl#registerInstance` 方法基本一致的逻辑，注册 `Service` 信息，写入实例信息 `InstancePublishInfo`，并在随后发布 `ClientRegisterServiceEvent` 事件，这个事件我们在上一个小节专门介绍过，它的作用是将服务实例的变更信息推送给订阅了这个服务的所有客户端。
+
+总而言之，通过 Distro 协议同步数据给集群中其他节点相当于在其他节点重新执行了一次实例注册的逻辑。不过，大家有没有考虑过这个问题：为什么 Distro 协议能够通过如此简单的方式在服务发现场景下保证数据的最终一致性呢？
+
+最主要的原因是：**服务注册数据模型的属性简化了分布式一致性问题，避免了复杂的冲突解决机制**。该如何理解这个特点呢？
+
+- **服务实例通过多个维度确定唯一性**：命名空间 + 服务名 + 集群名 + IP地址 + 端口号，这种唯一性设计确保了同一个服务实例的注册信息在任何节点都是相同的，所以同一实例的注册信息在不同节点、不同时间先后写入都不会存在数据冲突问题，**写入操作是幂等的**，大大降低了保证数据一致性的复杂度。
+
+理解了这一点，我觉得便清楚了 Distro 协议的精髓。此外，还有以下原因使得 Distro 协议适用：
+
+1. 服务实例的注册信息是 **临时数据**：数据具有生命周期，会自动过期或被清理，不需要持久化存储，丢失后可以重新生成，降低了维护实例数据的难度
+2. 业务场景能够接受数据的 **最终一致性**：可用性（Availability）比一致性（Consistency）更重要，短时间内部分实例注册信息不一致不影响业务
+3. 多个 Nacos Client 客户端会连接到不同的 Nacos Server 服务端，相当于进行了 **分片**：每个服务节点负责特定的客户端实例，客户端注册的操作基本只在一个服务节点发生，大大降低了发生写入冲突的可能
+
+接下来我们看一下在 Distro 协议中是如何清理过期数据的，核心逻辑在 `ExpiredClientCleaner` 中，它是一个定期执行的任务，任务逻辑如下：
+
+```java
+private static class ExpiredClientCleaner implements Runnable {
+
+    private final EphemeralIpPortClientManager clientManager;
+    
+    @Override
+    public void run() {
+        long currentTime = System.currentTimeMillis();
+        // 获取当前 Nacos Server 下连接的所有客户端
+        for (String each : clientManager.allClientId()) {
+            // 遍历处理客户端信息
+            IpPortBasedClient client = (IpPortBasedClient) clientManager.getClient(each);
+            // 如果客户端已经失效（在规定时间段内失去心跳）了
+            if (null != client && isExpireClient(currentTime, client)) {
+                // 执行客户端断开的逻辑，会触发 ClientDisconnectEvent 事件，删除失效的链接并通知集群内其他节点
+                clientManager.clientDisconnected(each);
+            }
+        }
+    }
+}
+```
+
+这个定时任务会在 Nacos Server 启动时，在 `ScheduledExecutorService` 中定期 5s 执行一次：
+
+```java
+public class EphemeralIpPortClientManager implements ClientManager {
+    public EphemeralIpPortClientManager(DistroMapper distroMapper, SwitchDomain switchDomain) {
+        // 默认定期 5s 检查一次
+        GlobalExecutor.scheduleExpiredClientCleaner(new ExpiredClientCleaner(this, switchDomain), 0,
+                Constants.DEFAULT_HEART_BEAT_INTERVAL, TimeUnit.MILLISECONDS);
+        // ...
+    }
+}
+```
+
+以此来保证过期的实例数据能及时被移除。
+
+---
+
+### 巨人的肩膀
+
+- [Github - alibaba/nacos](https://github.com/alibaba/nacos)
+- [博客园 - Nacos的基本使用（注册中心、配置中心）](https://www.cnblogs.com/wenxuehai/p/16179629.html)

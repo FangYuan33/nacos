@@ -74,6 +74,7 @@ public abstract class AbstractClient implements Client {
             InstancePublishInfo old = publishers.put(service, instancePublishInfo);
             MetricsMonitor.incrementIpCountWithBatchRegister(old, (BatchInstancePublishInfo) instancePublishInfo);
         } else {
+            // 记录实例的发布信息，用于后续从发布信息中解析获取注册实例的 IP 信息等
             if (null == publishers.put(service, instancePublishInfo)) {
                 MetricsMonitor.incrementInstanceCount();
             }
@@ -161,6 +162,7 @@ public abstract class AbstractClient implements Client {
                 instances.add(entry.getValue());
             }
         }
+        // 包含了命名空间、服务信息和实例信息（InstancePublishInfo 或 BatchInstanceData）等
         ClientSyncData data = new ClientSyncData(getClientId(), namespaces, groupNames, serviceNames, instances, batchInstanceData);
         data.getAttributes().addClientAttribute(REVISION, getRevision());
         return data;

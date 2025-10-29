@@ -71,7 +71,7 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
         checkClientIsLegal(client, clientId);
         // 将实例信息转换为发布信息对象
         InstancePublishInfo instanceInfo = getPublishInfo(instance);
-        // 将实例添加到客户端的服务实例列表中
+        // [registerInstance] 步骤5：将实例添加到客户端的服务实例列表中
         client.addServiceInstance(singleton, instanceInfo);
         client.setLastUpdatedTime();
         client.recalculateRevision();
