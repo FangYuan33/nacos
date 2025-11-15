@@ -26,6 +26,7 @@ import com.alibaba.nacos.api.config.listener.Listener;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.api.naming.NamingService;
 import com.alibaba.nacos.client.naming.NacosNamingService;
+import com.alibaba.nacos.common.remote.client.grpc.GrpcConstants;
 import com.alibaba.nacos.test.base.ConfigCleanUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -110,6 +111,7 @@ class ConfigLongPollConfigITCase {
         properties.put(PropertyKeyConst.CONFIG_LONG_POLL_TIMEOUT, "20000");
         properties.put(PropertyKeyConst.CONFIG_RETRY_TIME, "3000");
         properties.put(PropertyKeyConst.MAX_RETRY, "5");
+        properties.put(GrpcConstants.GRPC_THREADPOOL_ALLOW_CORE_THREAD_TIMEOUT, false);
         ConfigService configService = NacosFactory.createConfigService(properties);
 
         MemoryAnalyzer analyzer = new MemoryAnalyzer();
