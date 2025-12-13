@@ -88,7 +88,7 @@
     </issueManagement>
     
     <properties>
-        <revision>3.1.0</revision>
+        <revision>3.2.0-SNAPSHOT</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <!-- Compiler settings properties -->
@@ -129,7 +129,7 @@
         
         <!-- dependency version -->
         <nacos.logback.adapter.version>1.1.4</nacos.logback.adapter.version>
-        <spring-boot-dependencies.version>3.4.9</spring-boot-dependencies.version>
+        <spring-boot-dependencies.version>3.4.10</spring-boot-dependencies.version>
         <commons-io.version>2.14.0</commons-io.version>
         <commons-collections.version>3.2.2</commons-collections.version>
         <slf4j-api.version>2.0.13</slf4j-api.version>
